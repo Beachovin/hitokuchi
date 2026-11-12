@@ -1,0 +1,6 @@
+# ローカル開発用の設定のひな形。.dev.vars にコピーして値を入れる（.dev.vars は Git の管理外）
+# 型チェック（npm run typecheck）は、このファイルからシークレットの名前を読み取る
+ANTHROPIC_API_KEY=
+GOOGLE_CLIENT_SECRET=
+RESEND_API_KEY=
+ADMIN_DEV_BYPASS=true

@@ -126,6 +126,7 @@
 | ファイル | 内容 | Git 管理 |
 |---|---|---|
 | `.dev.vars` | ローカル用のシークレットと `ADMIN_DEV_BYPASS=true` | 対象外 |
+| `.dev.vars.example` | 上のひな形。型チェックがシークレットの名前を知るためにも使う | 対象 |
 | `.wrangler/` | ローカルの D1・R2 のデータ | 対象外 |
 | `worker-configuration.d.ts` | `wrangler types` が作る型定義 | 対象外（自動生成） |
 | `db/demo/` | デモデータの生成スクリプト（`npm run demo:add:local` / `demo:remove:local`） | スクリプトのみ対象 |

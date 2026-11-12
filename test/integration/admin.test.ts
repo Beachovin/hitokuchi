@@ -88,13 +88,13 @@ describe("管理画面の保護", () => {
   });
   it("ADMIN_HOST を設定すると、ほかのドメインの /admin は 404 になる", async () => {
     const cookie = await login(await addUser({ role: "admin" }));
-    const res = await rejected(requireAdmin(req("/admin", cookie), { ...env, ADMIN_HOST: "admin.example.test" } as unknown as Env));
+    const res = await rejected(requireAdmin(req("/admin", cookie), { ...env, ADMIN_HOST: "admin.example.test" }));
     expect(res.status).toBe(404);
   });
   it("Cloudflare Access 必須のときは、Access の認証メールとログイン中のメールの一致を確認する", async () => {
     const id = await addUser({ role: "admin", email: "staff2@example.test" });
     const cookie = await login(id);
-    const strict = { ...env, ADMIN_REQUIRE_ACCESS: "true" } as unknown as Env;
+    const strict = { ...env, ADMIN_REQUIRE_ACCESS: "true" };
     expect((await rejected(requireAdmin(req("/admin", cookie), strict))).status).toBe(403);
     expect((await rejected(requireAdmin(req("/admin", cookie, { headers: { "Cf-Access-Authenticated-User-Email": "other@example.test" } }), strict))).status).toBe(403);
     expect(await requireAdmin(req("/admin", cookie, { headers: { "Cf-Access-Authenticated-User-Email": "Staff2@example.test" } }), strict)).toHaveProperty("id", id);
