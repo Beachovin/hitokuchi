@@ -16,7 +16,7 @@ const STATIC_CACHE = `hitokuchi-static-${VERSION}`;
 const IMG_CACHE = `hitokuchi-img-${VERSION}`;
 const OFFLINE_URL = "/offline.html";
 const PRECACHE = [OFFLINE_URL, "/favicon.svg", "/icons/icon-192.png", "/manifest.webmanifest"];
-const BYPASS = [/^\/admin/, /^\/auth\//, /^\/api\//, /^\/login/, /^\/sitemap\.xml/, /^\/robots\.txt/, /^\/ads\.txt/, /^\/sw\.js/];
+const BYPASS = [/^\/admin/, /^\/ad\//, /^\/auth\//, /^\/api\//, /^\/login/, /^\/sitemap\.xml/, /^\/robots\.txt/, /^\/ads\.txt/, /^\/sw\.js/];
 const IMG_LIMIT = 200;
 
 self.addEventListener("install", (event) => {

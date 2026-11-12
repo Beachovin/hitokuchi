@@ -35,6 +35,7 @@ export default [
   route("sitemap.xml", "routes/seo/sitemap.ts"),
   route("robots.txt", "routes/seo/robots.ts"),
   route("ads.txt", "routes/seo/ads.ts"),
+  route("ad/rakuten/:slot", "routes/seo/rakuten-ad.ts"),
 
   // 管理画面（Google ログイン＋管理者ロール。本番は Cloudflare Access も併用推奨）
   route("admin/login", "routes/admin/login.tsx"),

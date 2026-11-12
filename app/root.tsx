@@ -36,7 +36,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const data = useRouteLoaderData<{ publicSettings: PublicSettings }>("root");
-  const adClient = data?.publicSettings.ads_enabled ? data.publicSettings.adsense_client : "";
+  // AdSense の確認用コードは、クライアント ID があれば広告を出す前から読み込む（審査のため）。広告枠の表示は「広告を表示する」で切り替える
+  const adClient = data?.publicSettings.adsense_client ?? "";
   return (
     <html lang="ja">
       <head>

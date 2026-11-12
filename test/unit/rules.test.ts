@@ -105,7 +105,7 @@ describe("口コミの自動チェック", () => {
 });
 
 describe("アフィリエイトリンク", () => {
-  const s = { ads_enabled: false, adsense_client: "", adsense_slot: "", amazon_tag: "hitokuchi-22", rakuten_affiliate_id: "abc.123", operator_name: "", operator_contact: "" };
+  const s = { ads_enabled: false, adsense_client: "", adsense_slot: "", amazon_tag: "hitokuchi-22", rakuten_affiliate_id: "abc.123", operator_name: "", operator_contact: "", rakuten_ads_enabled: false, rakuten_ad_sp: "", rakuten_ad_pc: "" };
   it("通販で買えるカテゴリだけに出す", () => {
     expect(affiliateLinks(s, "ポテトチップス", "snack")).toHaveLength(2);
     expect(affiliateLinks(s, "生シュークリーム", "sweets")).toEqual([]);

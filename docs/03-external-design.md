@@ -62,7 +62,7 @@
 | `POST /auth/dev` | 開発用ログイン（localhost かつ `ADMIN_DEV_BYPASS=true` のときだけ。本番は 404） | `label`, `admin` |
 | `GET /admin/api/products` | 特集編集用の商品検索 | `q` |
 
-そのほか：`GET /img/<key>`（R2 の画像）、`GET /sitemap.xml`、`GET /robots.txt`、`GET /ads.txt`、`GET /manifest.webmanifest`、`GET /sw.js`。
+そのほか：`GET /img/<key>`（R2 の画像）、`GET /ad/rakuten/sp|pc`（楽天の画像広告だけのページ。広告枠の iframe から読み込む）、`GET /sitemap.xml`、`GET /robots.txt`、`GET /ads.txt`、`GET /manifest.webmanifest`、`GET /sw.js`。
 
 エラー時は、入力エラー 400、未ログイン 401、権限なし 403、存在しない 404、回数制限 429 を返す。別サイトから送られた書き込みリクエストは 403 で拒否する。
 

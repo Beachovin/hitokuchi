@@ -16,10 +16,15 @@ export type Settings = {
   /** 運営者名とお問い合わせ先（プライバシーポリシー・利用規約に表示） */
   operator_name: string;
   operator_contact: string;
+  /** 楽天の画像広告（バナー・ウィジェット）を広告枠に表示する */
+  rakuten_ads_enabled: boolean;
+  /** 楽天の広告コード（スマホ用・PC 用。片方だけでもよい） */
+  rakuten_ad_sp: string;
+  rakuten_ad_pc: string;
 };
 
 /** お客様向け画面に渡してよい設定だけ（API キー等は含めない） */
-export type PublicSettings = Pick<Settings, "ads_enabled" | "adsense_client" | "adsense_slot" | "amazon_tag" | "rakuten_affiliate_id" | "operator_name" | "operator_contact">;
+export type PublicSettings = Pick<Settings, "ads_enabled" | "adsense_client" | "adsense_slot" | "amazon_tag" | "rakuten_affiliate_id" | "operator_name" | "operator_contact" | "rakuten_ads_enabled" | "rakuten_ad_sp" | "rakuten_ad_pc">;
 
 export async function getSettings(db: D1Database): Promise<Settings> {
   const { results } = await db.prepare("SELECT key, value FROM settings").all<{ key: string; value: string }>();
@@ -38,6 +43,9 @@ export async function getSettings(db: D1Database): Promise<Settings> {
     ai_summary_enabled: m.get("ai_summary_enabled") !== "0",
     operator_name: m.get("operator_name") ?? "",
     operator_contact: m.get("operator_contact") ?? "",
+    rakuten_ads_enabled: m.get("rakuten_ads_enabled") === "1",
+    rakuten_ad_sp: m.get("rakuten_ad_sp") ?? "",
+    rakuten_ad_pc: m.get("rakuten_ad_pc") ?? "",
   };
 }
 
@@ -51,6 +59,10 @@ export async function getPublicSettings(db: D1Database): Promise<PublicSettings>
     rakuten_affiliate_id: s.rakuten_affiliate_id,
     operator_name: s.operator_name,
     operator_contact: s.operator_contact,
+    rakuten_ads_enabled: s.rakuten_ads_enabled,
+    // 広告がオフのときはコードを画面に渡さない
+    rakuten_ad_sp: s.rakuten_ads_enabled ? s.rakuten_ad_sp : "",
+    rakuten_ad_pc: s.rakuten_ads_enabled ? s.rakuten_ad_pc : "",
   };
 }
 

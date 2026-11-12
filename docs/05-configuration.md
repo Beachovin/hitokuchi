@@ -59,11 +59,13 @@
 | `max_items_per_source` | 1 サイトあたりの最大取り込み件数 | 80 | 1〜200 |
 | `ai_summary_enabled` | 口コミの AI 要約 | オン | 口コミが 5 件以上の商品に要約を出す（API キーが必要） |
 | `digest_enabled` | 週 1 回のダイジェストメール | オフ | 月曜 8:00 に配信 |
-| `ads_enabled` | 広告を表示する | オフ | AdSense の広告枠を出す |
+| `ads_enabled` | 広告を表示する | オフ | AdSense の広告枠を出す。確認用コードと ads.txt は、このスイッチに関係なくクライアント ID があれば入る（審査用） |
 | `adsense_client` | AdSense クライアント ID | 空 | `ca-pub-…`。`/ads.txt` にも使う |
 | `adsense_slot` | 広告スロット ID | 空 | 数字 |
 | `amazon_tag` | Amazon アソシエイトのタグ | 空 | 例：`xxxx-22` |
 | `rakuten_affiliate_id` | 楽天アフィリエイト ID | 空 | — |
+| `rakuten_ads_enabled` | 楽天の画像広告を表示する | オフ | 広告枠に楽天のバナー・モーションウィジェットを出す（AdSense が出ている枠では AdSense を優先） |
+| `rakuten_ad_sp` / `rakuten_ad_pc` | 楽天の広告コード（スマホ用・PC 用） | 空 | 楽天アフィリエイトで作ったコード。楽天以外のサイトを読み込むコードは保存できない |
 | `operator_name` | 運営者名 | 空 | 利用規約・プライバシーポリシーに表示 |
 | `operator_contact` | お問い合わせ先 | 空 | メールアドレス、または `https://` のフォーム URL |
 | `maintenance_last` | （自動） | — | 毎朝の後片付けの結果（JSON）。ダッシュボードに表示 |

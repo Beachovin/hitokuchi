@@ -34,6 +34,15 @@ describe("設定", () => {
     expect(await getSettings(env.DB)).toMatchObject({ auto_publish: true, operator_name: "ひとくち運営", max_items_per_source: 40 });
   });
   it("お客様向け画面に渡す設定には内部用の項目を含めない", async () => {
-    expect(Object.keys(await getPublicSettings(env.DB)).sort()).toEqual(["ads_enabled", "adsense_client", "adsense_slot", "amazon_tag", "operator_contact", "operator_name", "rakuten_affiliate_id"]);
+    expect(Object.keys(await getPublicSettings(env.DB)).sort()).toEqual(["ads_enabled", "adsense_client", "adsense_slot", "amazon_tag", "operator_contact", "operator_name", "rakuten_ad_pc", "rakuten_ad_sp", "rakuten_ads_enabled", "rakuten_affiliate_id"]);
+  });
+});
+
+describe("楽天の画像広告の設定", () => {
+  it("広告がオフのときは、お客様向けの画面に広告コードを渡さない", async () => {
+    await saveSettings(env.DB, { rakuten_ads_enabled: "0", rakuten_ad_sp: "<a href='https://hb.afl.rakuten.co.jp/x'>rakuten</a>" });
+    expect(await getPublicSettings(env.DB)).toMatchObject({ rakuten_ads_enabled: false, rakuten_ad_sp: "" });
+    await saveSettings(env.DB, { rakuten_ads_enabled: "1" });
+    expect((await getPublicSettings(env.DB)).rakuten_ad_sp).toContain("rakuten");
   });
 });
