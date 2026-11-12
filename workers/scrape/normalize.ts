@@ -147,3 +147,27 @@ export function normalizeKey(s: string) {
     .toLowerCase()
     .replace(/[\s・･\-ー〜~！!？?「」『』（）()【】\[\]、。,.]/g, "");
 }
+
+/**
+ * 商品名の似ている度合い（0〜1）。正規化した名前の 2 文字ずつの重なり（Dice 係数）。
+ * 「〜 2 個入」「〜（ローソン限定）」など表記ゆれ程度の違いなら 0.8 以上になる。
+ */
+export function nameSimilarity(a: string, b: string) {
+  const x = normalizeKey(a);
+  const y = normalizeKey(b);
+  if (x === y) return 1;
+  if (x.length < 2 || y.length < 2) return 0;
+  const grams = (s: string) => {
+    const m = new Map<string, number>();
+    for (let i = 0; i < s.length - 1; i++) m.set(s.slice(i, i + 2), (m.get(s.slice(i, i + 2)) ?? 0) + 1);
+    return m;
+  };
+  const gx = grams(x);
+  const gy = grams(y);
+  let hit = 0;
+  for (const [g, n] of gx) hit += Math.min(n, gy.get(g) ?? 0);
+  return (2 * hit) / (x.length - 1 + (y.length - 1));
+}
+
+/** 重複とみなす似ている度合い */
+export const DUPLICATE_THRESHOLD = 0.85;

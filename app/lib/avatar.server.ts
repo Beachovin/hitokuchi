@@ -1,4 +1,4 @@
-import { AVATAR_MAX_BYTES, AVATAR_TYPES } from "./profile";
+import { AVATAR_STORE_MAX_BYTES, AVATAR_TYPES } from "./profile";
 
 // アップロードされた画像の先頭バイトで形式を確認（拡張子や Content-Type の偽装対策）
 function sniff(b: Uint8Array) {
@@ -12,7 +12,7 @@ function sniff(b: Uint8Array) {
 /** プロフィール画像を R2 に保存し、古い画像を削除する。キーはユーザー ID を含まないランダム値 */
 export async function saveAvatar(env: Env, userId: string, oldKey: string | null, file: File) {
   if (file.size === 0) return { error: "画像を選んでください" };
-  if (file.size > AVATAR_MAX_BYTES) return { error: "画像は 5MB 以下にしてください" };
+  if (file.size > AVATAR_STORE_MAX_BYTES) return { error: "画像を縮小できませんでした。別の画像を選ぶか、ブラウザを更新してもう一度お試しください" };
   const buf = new Uint8Array(await file.arrayBuffer());
   const type = sniff(buf);
   if (!type || !AVATAR_TYPES.includes(type)) return { error: "JPEG・PNG・WebP・GIF の画像を選んでください" };

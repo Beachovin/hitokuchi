@@ -1,10 +1,9 @@
 import { Link, data } from "react-router";
 import type { Route } from "./+types/season";
-import { seasonProducts } from "~/lib/features.server";
 import { getCustomFeature } from "~/lib/custom-features.server";
 import { getUser } from "~/lib/auth.server";
 import { isAdmin } from "~/lib/admin.server";
-import { SEASONS, themeGradient } from "~/lib/features";
+import { themeGradient } from "~/lib/features";
 import { ProductCard } from "~/components/product-card";
 import { AdSlot } from "~/components/ad-slot";
 import { ShareButtons } from "~/components/share-buttons";
@@ -23,18 +22,14 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     if (visible) {
       const f = custom.feature;
       return {
-        season: { slug: f.slug, title: f.title, lead: f.lead, emoji: f.emoji, months: [] as number[], gradient: themeGradient(f.theme) },
+        season: { slug: f.slug, title: f.title, lead: f.lead, emoji: f.emoji, gradient: themeGradient(f.theme) },
         products: custom.items,
         url: new URL(request.url).origin + `/features/${f.slug}`,
         preview,
       };
     }
   }
-  const s = SEASONS.find((x) => x.slug === params.slug);
-  const products = s ? await seasonProducts(context.cloudflare.env.DB, s.slug) : null;
-  if (!s || !products) throw data(null, { status: 404 });
-  const { pattern: _p, ...season } = s;
-  return { season, products, url: new URL(request.url).href, preview: false };
+  throw data(null, { status: 404 });
 }
 
 export const meta: Route.MetaFunction = ({ data }) =>

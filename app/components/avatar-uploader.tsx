@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { AVATAR_MAX_BYTES, AVATAR_TYPES } from "~/lib/profile";
+import { AVATAR_INPUT_MAX_BYTES, AVATAR_PX, AVATAR_STORE_MAX_BYTES, AVATAR_TARGET_BYTES, AVATAR_TYPES } from "~/lib/profile";
 
 /**
  * プロフィール画像の選択。ブラウザ側で 512px の正方形にトリミング・縮小（WebP）してから送信するので、
@@ -19,19 +19,21 @@ export function AvatarUploader({ current, nickname }: { current: string | null; 
       e.target.value = "";
       return;
     }
-    if (file.size > AVATAR_MAX_BYTES) {
-      setError("画像は 5MB 以下にしてください");
+    if (file.size > AVATAR_INPUT_MAX_BYTES) {
+      setError("画像は 20MB 以下にしてください");
       e.target.value = "";
       return;
     }
     try {
-      const resized = await squareResize(file, 512);
+      const resized = await compressAvatar(file);
+      if (resized.size > AVATAR_STORE_MAX_BYTES) throw new Error("too large");
       const dt = new DataTransfer();
       dt.items.add(resized);
       e.target.files = dt.files;
       setPreview(URL.createObjectURL(resized));
     } catch {
-      setPreview(URL.createObjectURL(file)); // 変換できない場合は元画像のまま送る
+      setError("この画像は読み込めませんでした。別の画像を選んでください");
+      e.target.value = "";
     }
   }
 
@@ -49,7 +51,7 @@ export function AvatarUploader({ current, nickname }: { current: string | null; 
       <div className="min-w-0 text-sm">
         <input ref={input} type="file" name="avatar" accept={AVATAR_TYPES.join(",")} onChange={onChange} className="sr-only" />
         <button type="button" onClick={() => input.current?.click()} className="font-semibold text-brand-600 hover:underline">画像を選ぶ</button>
-        <p className="mt-0.5 text-xs text-stone-400">JPEG・PNG・WebP・GIF／5MBまで</p>
+        <p className="mt-0.5 text-xs text-stone-400">JPEG・PNG・WebP・GIF（自動で小さくして保存します）</p>
         {preview && <p className="mt-0.5 text-xs text-emerald-600">「保存」で反映されます</p>}
         {error && <p className="mt-0.5 text-xs text-rose-600">{error}</p>}
       </div>
@@ -57,13 +59,32 @@ export function AvatarUploader({ current, nickname }: { current: string | null; 
   );
 }
 
-async function squareResize(file: File, size: number): Promise<File> {
+/**
+ * プロフィール画像を正方形に切り抜いて 240px に縮小し、容量が目標以下になるまで画質を下げて圧縮する。
+ * WebP を書き出せないブラウザ（古い Safari など）は JPEG にする。位置情報などのメタデータは残らない。
+ */
+async function compressAvatar(file: File): Promise<File> {
   const bmp = await createImageBitmap(file);
   const side = Math.min(bmp.width, bmp.height);
   const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = Math.min(size, side);
+  canvas.width = canvas.height = Math.min(AVATAR_PX, side);
   const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#fff"; // 透過 PNG を JPEG にしたとき黒くならないように
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise<Blob>((ok, ng) => canvas.toBlob((b) => (b ? ok(b) : ng(new Error("toBlob"))), "image/webp", 0.88));
-  return new File([blob], "avatar.webp", { type: "image/webp" });
+  bmp.close();
+
+  const encode = (type: string, q: number) => new Promise<Blob | null>((ok) => canvas.toBlob(ok, type, q));
+  const probe = await encode("image/webp", 0.8);
+  const type = probe?.type === "image/webp" ? "image/webp" : "image/jpeg";
+  let best: Blob | null = type === "image/webp" ? probe : null;
+  for (const q of [0.8, 0.7, 0.6, 0.5]) {
+    const b = q === 0.8 && best ? best : await encode(type, q);
+    if (!b) continue;
+    if (!best || b.size < best.size) best = b;
+    if (b.size <= AVATAR_TARGET_BYTES) break;
+  }
+  if (!best) throw new Error("encode failed");
+  return new File([best], type === "image/webp" ? "avatar.webp" : "avatar.jpg", { type });
 }

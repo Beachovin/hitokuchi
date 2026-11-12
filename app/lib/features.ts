@@ -1,4 +1,4 @@
-// 地域・季節の特集（クライアントでも使う定義）
+// 地域別の新商品リストと、管理画面で作る特集の定義（クライアントでも使う）
 
 export const AREAS = [
   { slug: "hokkaido", name: "北海道", emoji: "🐻", keys: ["北海道"] },
@@ -20,27 +20,6 @@ export function limitedAreas(region: string | null | undefined) {
   const hit = AREAS.filter((a) => a.keys.some((k) => r.includes(k)));
   return hit.length >= 1 && hit.length <= 3 ? hit.map((a): string => a.slug) : [];
 }
-
-export type Season = {
-  slug: string;
-  title: string;
-  lead: string;
-  emoji: string;
-  months: number[]; // 空なら通年
-  pattern: RegExp;
-  gradient: string;
-};
-
-export const SEASONS: Season[] = [
-  { slug: "autumn-sweets", title: "秋の味覚スイーツ", lead: "栗・芋・かぼちゃ・りんご。秋だけのご褒美をまとめました。", emoji: "🌰", months: [9, 10, 11], pattern: /栗|マロン|モンブラン|芋|いも|焼き芋|かぼちゃ|南瓜|パンプキン|りんご|林檎|アップル|梨|ぶどう|葡萄/, gradient: "from-amber-500 to-orange-600" },
-  { slug: "winter-warm", title: "冬のあったかグルメ", lead: "鍋・スープ・中華まん。寒い日に食べたい新商品。", emoji: "🍲", months: [11, 12, 1, 2], pattern: /鍋|スープ|まん|グラタン|ドリア|おでん|シチュー|あったか|ポタージュ|雑炊|うどん|ラーメン|チャウダー/, gradient: "from-rose-500 to-red-700" },
-  { slug: "spring-sakura", title: "春の桜・いちごフェア", lead: "桜といちごの季節限定商品。", emoji: "🌸", months: [2, 3, 4], pattern: /桜|さくら|サクラ|苺|いちご|イチゴ|ストロベリー/, gradient: "from-pink-400 to-rose-500" },
-  { slug: "summer-cool", title: "夏のひんやり特集", lead: "冷たいスイーツ・麺・ドリンクで暑さをしのごう。", emoji: "🧊", months: [6, 7, 8, 9], pattern: /冷|ひんやり|アイス|ゼリー|レモン|フラッペ|かき氷|そうめん|冷やし|シャーベット|ソーダ/, gradient: "from-sky-400 to-cyan-600" },
-  { slug: "korean", title: "韓国グルメ特集", lead: "キンパ・ビビンバ・ヤンニョム。コンビニで楽しむ韓国の味。", emoji: "🇰🇷", months: [], pattern: /韓国|キンパ|ビビンバ|タッカルビ|ヤンニョム|チュモッパ|トッポギ|プルコギ|ナムル|コチュジャン|チヂミ/, gradient: "from-red-500 to-indigo-600" },
-  { slug: "chocolate", title: "チョコレート好きに捧ぐ", lead: "チョコ・ショコラ・カカオの新作を集めました。", emoji: "🍫", months: [], pattern: /チョコ|ショコラ|カカオ|ガナッシュ|ブラウニー/, gradient: "from-amber-800 to-stone-900" },
-];
-
-export const inSeason = (s: Season, month: number) => s.months.length === 0 || s.months.includes(month);
 
 // 管理画面で作る特集のテーマ色
 export const THEMES = [

@@ -22,5 +22,12 @@ export function demographicLabel(age: string | null | undefined, gender: string 
   return [ageLabel(age), genderLabel(gender)].filter(Boolean).join("・") || null;
 }
 
-export const AVATAR_MAX_BYTES = 5 * 1024 * 1024; // 5MB（スマホ写真の平均的なサイズを想定）
+/** 選べる元画像の上限（端末側で縮小してから送るので、スマホ写真がそのまま選べる大きさ） */
+export const AVATAR_INPUT_MAX_BYTES = 20 * 1024 * 1024;
+/** 保存する画像の上限。端末側で 240px・約 20KB 以下に圧縮したものだけを受け付ける */
+export const AVATAR_STORE_MAX_BYTES = 100 * 1024;
+/** 表示は最大 80px。高精細画面（3 倍）でもぼやけない大きさ */
+export const AVATAR_PX = 240;
+/** 圧縮の目標サイズ（これを下回るまで画質を段階的に下げる） */
+export const AVATAR_TARGET_BYTES = 20 * 1024;
 export const AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];

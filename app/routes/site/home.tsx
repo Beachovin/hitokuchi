@@ -6,7 +6,8 @@ import { getUser } from "~/lib/auth.server";
 import { battleVoterKey, ensureBattles, getBattles } from "~/lib/battles.server";
 import { BattleCard } from "~/components/battle-card";
 import { recommendFor } from "~/lib/recommend.server";
-import { inSeason, SEASONS } from "~/lib/features";
+import { themeGradient } from "~/lib/features";
+import { listCustomFeatures } from "~/lib/custom-features.server";
 import { AdSlot } from "~/components/ad-slot";
 import { CHAIN_ORDER, addDays, mondayOf, shortWeekLabel, todayJst } from "~/lib/weeks";
 import { ProductCard } from "~/components/product-card";
@@ -31,8 +32,10 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const battleCount = allBattles.length;
   const battleVoted = allBattles.filter((b) => b.mine).length;
   const rec = user ? await recommendFor(db, user.id, 10) : null;
-  const month = Number(todayJst().slice(5, 7));
-  const seasonal = SEASONS.filter((s) => inSeason(s, month)).map(({ pattern: _p, ...s }) => s);
+  // 管理画面で作った公開中の特集（商品が入っているものだけ）
+  const seasonal = (await listCustomFeatures(db, true))
+    .filter((f) => (f.item_count ?? 0) > 0)
+    .map((f) => ({ slug: f.slug, title: f.title, lead: f.lead, emoji: f.emoji, gradient: themeGradient(f.theme) }));
   const [fresh, ranking, reviewRows, categories, weekItems] = await Promise.all([
     listProducts(db, { sort: "new", limit: 10 }),
     listProducts(db, { sort: "rating", limit: 10 }),
@@ -134,7 +137,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         ))}
       </Shelf>
 
-      {seasonal.length > 0 && (
+      {(
         <section className="mt-8">
           <SectionTitle title="特集" to="/features" />
           <div className="shelf -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:px-0">

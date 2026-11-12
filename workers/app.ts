@@ -5,6 +5,7 @@ import { sendWeeklyDigests } from "../app/lib/digest.server";
 import { getSettings } from "../app/lib/settings.server";
 import { addDays, mondayOf, todayJst } from "../app/lib/weeks";
 import { generateWeeklyBattles } from "../app/lib/battles.server";
+import { purgeOldProducts } from "../app/lib/retention.server";
 
 declare module "react-router" {
   export interface AppLoadContext {
@@ -53,11 +54,13 @@ export default {
       );
       return;
     }
-    // 毎朝 6:00 JST：新商品の収集・気になる商品の通知・今週のバトル作成
+    // 毎朝 6:00 JST：各コンビニの新商品一覧の更新確認（変化があれば取り込み）・気になる商品の通知・今週のバトル作成
     ctx.waitUntil(env.SCRAPE_WORKFLOW.create({ params: { trigger: "cron" } }).then(() => {}));
     ctx.waitUntil(generateNotifications(env.DB, todayJst()).then(() => {}));
     // 今週の新商品バトル（ジャンルごと・まだ無いジャンルだけ追加）
     const week = mondayOf(todayJst());
     ctx.waitUntil(generateWeeklyBattles(env.DB, week, addDays(week, 6)).then(() => {}));
+    // 発売から 1 か月を過ぎた商品（と口コミ等）を削除
+    ctx.waitUntil(purgeOldProducts(env).then((r) => console.log("purge", r)).catch((e) => console.error("purge failed", e)));
   },
 } satisfies ExportedHandler<Env>;

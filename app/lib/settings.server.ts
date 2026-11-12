@@ -2,6 +2,8 @@
 
 export type Settings = {
   use_claude: boolean;
+  /** スクレイピング結果を承認待ちにせず、重複を除いてそのまま公開する */
+  auto_publish: boolean;
   claude_model: string;
   max_items_per_source: number;
   ads_enabled: boolean;
@@ -21,6 +23,7 @@ export async function getSettings(db: D1Database): Promise<Settings> {
   const m = new Map(results.map((r) => [r.key, r.value]));
   return {
     use_claude: m.get("use_claude") === "1",
+    auto_publish: m.get("auto_publish") === "1",
     claude_model: m.get("claude_model") || "claude-haiku-5-5",
     max_items_per_source: Number(m.get("max_items_per_source")) || 80,
     ads_enabled: m.get("ads_enabled") === "1",

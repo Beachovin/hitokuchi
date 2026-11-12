@@ -1,23 +1,27 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { getSettings } from "../app/lib/settings.server";
-import { ADAPTERS, type AdapterName } from "./scrape/adapters";
+import { ADAPTERS, type AdapterName, type RawItem } from "./scrape/adapters";
 import { refineWithClaude } from "./scrape/claude-normalize";
-import { isAllowedByRobots, politeFetch } from "./scrape/fetch";
-import { normalizeByRules, normalizeKey, parseKcal, type Normalized } from "./scrape/normalize";
+import { isAllowedByRobots, listHash, politeFetch } from "./scrape/fetch";
+import { approveCandidate } from "../app/lib/candidates.server";
+import { DUPLICATE_THRESHOLD, nameSimilarity, normalizeByRules, normalizeKey, parseKcal, type Normalized } from "./scrape/normalize";
 
 type Params = { trigger: "cron" | "manual"; sourceId?: number; mode?: "collect" | "backfill-details" };
-type Source = { id: number; name: string; adapter: AdapterName; url: string; max_items: number };
+// 手動実行は更新が無くても必ず処理する。定期実行は一覧が変わったときだけ処理する
+type Source = { id: number; name: string; adapter: AdapterName; url: string; max_items: number; list_hash: string | null; etag: string | null; last_modified: string | null };
 type Totals = { found: number; extracted: number; skipped: number; errors: number; input: number; output: number };
 
 const RETRY = { retries: { limit: 2, delay: "15 seconds", backoff: "exponential" }, timeout: "2 minutes" } as const;
 const CLAUDE_BATCH = 30;
 const DETAIL_LIMIT_PER_SOURCE = 60; // 1 回の収集で詳細ページを取得する上限（残りは「商品説明を補完」で取得）
 const BACKFILL_LIMIT = 120;
+const STALE_DAYS = 30; // これより前に発売された商品は取り込まない（自動削除の対象と揃える）
 
 /**
  * コンビニ新商品の収集パイプライン
- *   収集元ごとに: 一覧ページを 1 回取得 → アダプターで商品を抽出 → 既知の商品を除外
- *   → ルールで整形 →（設定 ON なら）Claude で仕上げ → 承認待ちに保存
+ *   収集元ごとに: 一覧ページを 1 回取得（条件付きリクエスト）→ 一覧の商品コードが前回と同じなら終了
+ *   → 既知の商品を除外 → ルールで整形 →（設定 ON なら）Claude で仕上げ
+ *   → 承認待ちに保存（自動公開 ON なら、重複の可能性があるものを除いてそのまま公開）
  */
 export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
   async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
@@ -27,8 +31,8 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
     const { settings, sources } = await step.do("load settings and sources", async () => {
       const settings = await getSettings(DB);
       const q = event.payload.sourceId
-        ? DB.prepare("SELECT id, name, adapter, url, max_items FROM scrape_sources WHERE id = ? AND adapter IS NOT NULL").bind(event.payload.sourceId)
-        : DB.prepare("SELECT id, name, adapter, url, max_items FROM scrape_sources WHERE enabled = 1 AND adapter IS NOT NULL");
+        ? DB.prepare("SELECT id, name, adapter, url, max_items, list_hash, etag, last_modified FROM scrape_sources WHERE id = ? AND adapter IS NOT NULL").bind(event.payload.sourceId)
+        : DB.prepare("SELECT id, name, adapter, url, max_items, list_hash, etag, last_modified FROM scrape_sources WHERE enabled = 1 AND adapter IS NOT NULL");
       return { settings, sources: (await q.all<Source>()).results };
     });
     const useClaude = settings.use_claude && !!this.env.ANTHROPIC_API_KEY;
@@ -36,6 +40,26 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
     for (const [si, src] of sources.entries()) {
       const adapter = ADAPTERS[src.adapter];
       if (!adapter) continue;
+      // 0. 一覧を取得し、前回から変わっていなければ何もしない（実行ログも残さない）
+      let fetched: { items: RawItem[]; hash: string; etag: string | null; lastModified: string | null } | { unchanged: true } | { error: string };
+      try {
+        fetched = await step.do(`check ${src.id}`, RETRY, async () => {
+          if (!(await isAllowedByRobots(src.url))) throw new Error(`robots.txt で禁止されています: ${src.url}`);
+          const force = event.payload.trigger === "manual";
+          const page = await politeFetch(src.url, force ? {} : { etag: src.etag, lastModified: src.last_modified });
+          if (page.notModified) return { unchanged: true as const };
+          const items = adapter.parse(page.body, page.url);
+          if (items.length === 0) throw new Error("商品が 0 件でした（ページ構造が変わった可能性があります）");
+          const hash = await listHash(items.map((i) => i.externalId));
+          if (!force && hash === src.list_hash) return { unchanged: true as const };
+          return { items: items.slice(0, Math.min(src.max_items, settings.max_items_per_source)), hash, etag: page.etag, lastModified: page.lastModified };
+        });
+      } catch (e) {
+        fetched = { error: String(e) };
+      }
+      await step.do(`checked ${src.id}`, () => DB.prepare("UPDATE scrape_sources SET checked_at = datetime('now') WHERE id = ?").bind(src.id).run().then(() => null));
+      if ("unchanged" in fetched) continue;
+
       const runId = await step.do(`start run ${src.id}`, async () => {
         const row = await DB.prepare("INSERT INTO scrape_runs(source_id, instance_id) VALUES (?, ?) RETURNING id").bind(src.id, event.instanceId).first<{ id: number }>();
         return row!.id;
@@ -44,14 +68,9 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
       const notes: string[] = [];
 
       try {
-        // 1. 一覧ページを取得して商品を抽出
-        const raw = await step.do(`fetch ${src.id}`, RETRY, async () => {
-          if (!(await isAllowedByRobots(src.url))) throw new Error(`robots.txt で禁止されています: ${src.url}`);
-          const page = await politeFetch(src.url);
-          const items = adapter.parse(page.body, page.url);
-          if (items.length === 0) throw new Error("商品が 0 件でした（ページ構造が変わった可能性があります）");
-          return items.slice(0, Math.min(src.max_items, settings.max_items_per_source));
-        });
+        // 1. 一覧から抽出した商品
+        if ("error" in fetched) throw new Error(fetched.error);
+        const raw = fetched.items;
         totals.found = raw.length;
 
         // 2. 既に候補・商品になっているものを除外し、ルールで整形
@@ -60,8 +79,11 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
           const known = new Set<string>();
           for (let i = 0; i < keys.length; i += 90) {
             const chunk = keys.slice(i, i + 90);
-            const { results } = await DB.prepare(`SELECT external_key FROM product_candidates WHERE external_key IN (${chunk.map(() => "?").join(",")})`)
-              .bind(...chunk)
+            const ph = chunk.map(() => "?").join(",");
+            const { results } = await DB.prepare(
+              `SELECT external_key FROM product_candidates WHERE external_key IN (${ph}) UNION SELECT external_key FROM scrape_seen WHERE external_key IN (${ph})`,
+            )
+              .bind(...chunk, ...chunk)
               .all<{ external_key: string }>();
             results.forEach((r) => known.add(r.external_key));
           }
@@ -73,10 +95,12 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
             .all<{ name: string }>();
           const existingNames = new Set(sameChain.map((r) => normalizeKey(r.name)));
           const today = new Date(Date.now() + 9 * 3600_000); // JST
+          const staleBefore = new Date(today.getTime() - STALE_DAYS * 86400_000).toISOString().slice(0, 10);
           const kept = new Map<string, Normalized>();
           for (const r of raw) {
             if (known.has(`${src.adapter}:${r.externalId}`)) continue;
             const n = normalizeByRules(r, today);
+            if (n.releasedOn && n.releasedOn < staleBefore) continue; // 1 か月以上前に発売済み
             const k = normalizeKey(n.name);
             if (existingNames.has(k)) continue;
             const prev = kept.get(k);
@@ -128,7 +152,7 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
           items = refined;
         }
 
-        // 5. 食品だけを承認待ちに保存
+        // 5. 食品だけを承認待ちに保存。自動公開 ON なら重複の可能性があるものを除いてそのまま公開する
         const saved = await step.do(`save ${src.id}`, async () => {
           const products = (await DB.prepare("SELECT id, name FROM products ORDER BY id DESC LIMIT 3000").all<{ id: number; name: string }>()).results;
           const byKey = new Map(products.map((p) => [normalizeKey(p.name), p.id]));
@@ -137,21 +161,40 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
           const stmts = food.map((n) =>
             DB.prepare(
               `INSERT INTO product_candidates(source_id, run_id, source_url, name, maker, category_hint, price, kcal, released_on, description, image_url, confidence, duplicate_of, external_key, region, normalized_by)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
             ).bind(
               // 発売日が載っていないサイト（デイリーヤマザキ等）は初回取得日を発売日とみなす
               src.id, runId, n.url, n.name, adapter.label, n.category, n.price, n.kcal, n.releasedOn ?? firstSeen, n.description, n.imageUrl, n.confidence,
               byKey.get(normalizeKey(n.name)) ?? null, `${src.adapter}:${n.externalId}`, n.region, normalizedBy,
             ),
           );
-          for (let i = 0; i < stmts.length; i += 50) await DB.batch(stmts.slice(i, i + 50));
-          return { saved: food.length, nonFood: items.filter((n) => !n.isFood).map((n) => n.name) };
+          const ids: number[] = [];
+          for (let i = 0; i < stmts.length; i += 50) {
+            const res = await DB.batch<{ id: number }>(stmts.slice(i, i + 50));
+            res.forEach((r) => ids.push(r.results[0].id));
+          }
+          return { ids, saved: food.length, nonFood: items.filter((n) => !n.isFood).map((n) => n.name) };
         });
         totals.extracted = saved.saved;
         totals.skipped += saved.nonFood.length;
         if (saved.nonFood.length) notes.push(`食品以外として除外: ${saved.nonFood.slice(0, 5).join("、")}${saved.nonFood.length > 5 ? " ほか" : ""}`);
         if (!useClaude && settings.use_claude) notes.push("Claude 整形が ON ですが ANTHROPIC_API_KEY が未設定のためルール整形のみ実行");
 
+        if (settings.auto_publish && saved.ids.length) {
+          const r = await step.do(`publish ${src.id}`, () => autoPublish(DB, saved.ids, adapter.label));
+          notes.push(`自動公開 ${r.published}件${r.duplicates ? `・重複の可能性で除外 ${r.duplicates}件` : ""}`);
+        }
+
+        // 次回の更新検知用に、今回処理した一覧を記録
+        if (!("error" in fetched)) {
+          const f = fetched;
+          await step.do(`remember ${src.id}`, () =>
+            DB.prepare("UPDATE scrape_sources SET list_hash = ?, etag = ?, last_modified = ?, changed_at = datetime('now') WHERE id = ?")
+              .bind(f.hash, f.etag, f.lastModified, src.id)
+              .run()
+              .then(() => null),
+          );
+        }
         await step.do(`finish run ${src.id}`, () => finishRun(DB, runId, src.id, "succeeded", totals, notes.join(" / ") || null));
       } catch (e) {
         totals.errors++;
@@ -204,6 +247,42 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
         .run();
     });
   }
+}
+
+/**
+ * 保存した候補を公開する。同じチェーンの公開済み商品（直近 60 日）や、今回の候補同士で
+ * 名前がほぼ同じものは重複の可能性ありとして公開せず「却下」にする（理由を note に残す）。
+ */
+async function autoPublish(DB: D1Database, ids: number[], chainLabel: string) {
+  const ph = ids.map(() => "?").join(",");
+  const { results: cands } = await DB.prepare(`SELECT id, name FROM product_candidates WHERE id IN (${ph}) AND status = 'pending' ORDER BY id`)
+    .bind(...ids)
+    .all<{ id: number; name: string }>();
+  const { results: existing } = await DB.prepare(
+    `SELECT p.id, p.name FROM products p JOIN makers m ON m.id = p.maker_id
+     WHERE m.name = ? AND p.created_at >= datetime('now', '-60 days')`,
+  )
+    .bind(chainLabel)
+    .all<{ id: number; name: string }>();
+  const pool = [...existing];
+  let published = 0;
+  let duplicates = 0;
+  for (const c of cands) {
+    const dup = pool.find((p) => nameSimilarity(p.name, c.name) >= DUPLICATE_THRESHOLD);
+    if (dup) {
+      await DB.prepare("UPDATE product_candidates SET status = 'rejected', duplicate_of = NULL, note = ? WHERE id = ?")
+        .bind(`自動排除：重複の可能性（${dup.name}）`, c.id)
+        .run();
+      duplicates++;
+      continue;
+    }
+    // 別チェーンの同名商品とは統合しない（チェーンごとに別の商品として公開）
+    await DB.prepare("UPDATE product_candidates SET duplicate_of = NULL, note = '自動公開' WHERE id = ?").bind(c.id).run();
+    await approveCandidate(DB, c.id, null);
+    pool.push({ id: -c.id, name: c.name });
+    published++;
+  }
+  return { published, duplicates };
 }
 
 async function fetchDetail(adapter: (typeof ADAPTERS)[AdapterName], url: string) {

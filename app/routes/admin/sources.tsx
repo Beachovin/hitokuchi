@@ -5,7 +5,7 @@ import { getSettings } from "~/lib/settings.server";
 import { Badge, Panel, PageTitle, btn } from "~/components/admin-ui";
 import { relativeDate } from "~/lib/format";
 
-type Source = { id: number; name: string; adapter: string | null; url: string; channel_name: string | null; enabled: number; last_run_at: string | null };
+type Source = { id: number; name: string; adapter: string | null; url: string; channel_name: string | null; enabled: number; last_run_at: string | null; checked_at: string | null; changed_at: string | null };
 type Run = { id: number; source_name: string | null; status: string; found: number; extracted: number; skipped: number; errors: number; input_tokens: number; output_tokens: number; message: string | null; started_at: string; finished_at: string | null };
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -16,7 +16,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     DB.prepare("SELECT r.*, s.name AS source_name FROM scrape_runs r LEFT JOIN scrape_sources s ON s.id = r.source_id ORDER BY r.id DESC LIMIT 30").all<Run>(),
     getSettings(DB),
   ]);
-  return { sources: sources.results, runs: runs.results, useClaude: settings.use_claude };
+  return { sources: sources.results, runs: runs.results, useClaude: settings.use_claude, autoPublish: settings.auto_publish };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -47,7 +47,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function Sources({ loaderData, actionData }: Route.ComponentProps) {
-  const { sources, runs, useClaude } = loaderData;
+  const { sources, runs, useClaude, autoPublish } = loaderData;
   const busy = useNavigation().state !== "idle";
   return (
     <>
@@ -60,8 +60,8 @@ export default function Sources({ loaderData, actionData }: Route.ComponentProps
         </Form>
       </PageTitle>
       <Panel className="mb-6 !py-3 text-sm text-stone-600 dark:text-stone-300">
-        収集元はコンビニ 5 社の新商品一覧に限定しています。各サイト 1 ページ（ミニストップは公開 JSON）だけを取得し、robots.txt を守ります。
-        整形モード：<strong>{useClaude ? "ルール ＋ Claude" : "ルールのみ"}</strong>（<a href="/admin/settings" className="underline">設定で変更</a>）
+        収集元はコンビニ 5 社の新商品一覧に限定しています。毎朝 6 時に各サイトの一覧 1 ページ（ミニストップは公開 JSON）だけを確認し、載っている商品が前回から変わったときだけ取り込みます（手動の「実行」は変化が無くても取り込みます）。robots.txt を守ります。
+        整形モード：<strong>{useClaude ? "ルール ＋ Claude" : "ルールのみ"}</strong>・取り込み後：<strong>{autoPublish ? "そのまま公開（重複は除外）" : "承認待ち"}</strong>（<a href="/admin/settings" className="underline">設定で変更</a>）
       </Panel>
       {actionData && "started" in actionData && (
         <p className="mb-4 rounded-xl bg-sky-50 p-3 text-sm text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">収集を開始しました（{actionData.started}）。</p>
@@ -71,7 +71,7 @@ export default function Sources({ loaderData, actionData }: Route.ComponentProps
         <Panel className="overflow-x-auto !p-0">
           <table className="w-full text-sm">
             <thead className="border-b border-stone-100 text-left text-xs text-stone-500 dark:border-white/5">
-              <tr><th className="p-3">名前</th><th className="p-3">販売店</th><th className="p-3">最終実行</th><th className="p-3">状態</th><th className="p-3" /></tr>
+              <tr><th className="p-3">名前</th><th className="p-3">販売店</th><th className="p-3">更新確認</th><th className="p-3">状態</th><th className="p-3" /></tr>
             </thead>
             <tbody className="divide-y divide-stone-100 dark:divide-white/5">
               {sources.map((s) => (
@@ -81,7 +81,10 @@ export default function Sources({ loaderData, actionData }: Route.ComponentProps
                     <p className="max-w-xs truncate text-xs text-stone-400">{s.url}</p>
                   </td>
                   <td className="p-3 text-stone-500">{s.channel_name ?? "—"}</td>
-                  <td className="p-3 text-xs text-stone-500">{s.last_run_at ? relativeDate(s.last_run_at) : "未実行"}</td>
+                  <td className="p-3 text-xs text-stone-500">
+                    <p>確認：{s.checked_at ? relativeDate(s.checked_at) : "未確認"}</p>
+                    <p>更新検知：{s.changed_at ? relativeDate(s.changed_at) : "—"}</p>
+                  </td>
                   <td className="p-3"><Badge tone={s.enabled ? "green" : "stone"}>{s.enabled ? "有効" : "停止中"}</Badge></td>
                   <td className="p-3">
                     <Form method="post" className="flex justify-end gap-1.5">

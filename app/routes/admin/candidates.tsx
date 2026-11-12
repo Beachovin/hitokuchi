@@ -1,7 +1,8 @@
 import { Form, Link, useNavigation } from "react-router";
 import type { Route } from "./+types/candidates";
 import { audit, requireAdmin } from "~/lib/admin.server";
-import { listCategories, syncProductFts, upsertMaker } from "~/lib/db.server";
+import { listCategories } from "~/lib/db.server";
+import { approveCandidate } from "~/lib/candidates.server";
 import { Badge, Panel, PageTitle, btn, input } from "~/components/admin-ui";
 import { relativeDate } from "~/lib/format";
 
@@ -41,58 +42,6 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   return { candidates: results, total: total?.n ?? 0, categories: await listCategories(DB) };
 }
 
-const ACCENTS = ["#f97316", "#e11d48", "#a16207", "#16a34a", "#0ea5e9", "#9333ea", "#db2777", "#ca8a04"];
-
-async function approve(env: Env, id: number, overrides: FormData | null) {
-  const { DB } = env;
-  const c = await DB.prepare(
-    "SELECT c.*, s.channel_id FROM product_candidates c LEFT JOIN scrape_sources s ON s.id = c.source_id WHERE c.id = ? AND c.status = 'pending'",
-  )
-    .bind(id)
-    .first<Candidate>();
-  if (!c) return;
-  const get = (k: string) => {
-    const v = overrides?.get(`${k}_${id}`);
-    return v == null ? undefined : String(v).trim();
-  };
-  const num = (v: string | undefined, fallback: number | null) => (v === undefined ? fallback : v === "" ? null : Number(v));
-  const name = get("name") || c.name;
-  const makerId = await upsertMaker(DB, get("maker") ?? c.maker);
-  const hinted = c.category_hint
-    ? await DB.prepare("SELECT id FROM categories WHERE slug = ? OR name = ?").bind(c.category_hint, c.category_hint).first<{ id: number }>()
-    : null;
-  const categoryId = num(get("category"), hinted?.id ?? null);
-  const price = num(get("price"), c.price);
-  const kcal = num(get("kcal"), c.kcal);
-  const released = get("released_on") || c.released_on;
-
-  let productId: number;
-  if (c.duplicate_of) {
-    // 既存商品にマージ（空欄だけ埋める）
-    productId = c.duplicate_of;
-    await DB.prepare(
-      `UPDATE products SET price = COALESCE(price, ?), kcal = COALESCE(kcal, ?), released_on = COALESCE(released_on, ?),
-         description = COALESCE(description, ?), jan = COALESCE(jan, ?), source_url = COALESCE(source_url, ?), image_url = COALESCE(image_url, ?), region = COALESCE(region, ?), updated_at = datetime('now')
-       WHERE id = ?`,
-    )
-      .bind(price, kcal, released, c.description, c.jan, c.source_url, c.image_url, c.region, productId)
-      .run();
-  } else {
-    const row = await DB.prepare(
-      `INSERT INTO products(name, maker_id, category_id, jan, price, kcal, description, accent, released_on, source_url, image_url, region)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
-    )
-      .bind(name, makerId, categoryId, c.jan, price, kcal, c.description, ACCENTS[id % ACCENTS.length], released, c.source_url, c.image_url, c.region)
-      .first<{ id: number }>();
-    productId = row!.id;
-    await syncProductFts(DB, productId);
-  }
-  if (c.channel_id) {
-    await DB.prepare("INSERT OR IGNORE INTO product_channels VALUES (?, ?)").bind(productId, c.channel_id).run();
-  }
-  await DB.prepare("UPDATE product_candidates SET status = 'approved', duplicate_of = ? WHERE id = ?").bind(productId, id).run();
-}
-
 export async function action({ request, context }: Route.ActionArgs) {
   const env = context.cloudflare.env;
   const admin = await requireAdmin(request, env);
@@ -100,7 +49,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   const intent = String(form.get("intent"));
   const [verb, idStr] = intent.split(":");
   if (verb === "approve") {
-    await approve(env, Number(idStr), form);
+    await approveCandidate(env.DB, Number(idStr), form);
     await audit(env, request, admin, "candidate.approve", `candidate:${idStr}`, form.get(`name_${idStr}`));
   } else if (verb === "reject") {
     await env.DB.prepare("UPDATE product_candidates SET status='rejected' WHERE id = ?").bind(Number(idStr)).run();
@@ -109,7 +58,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   else if (verb === "bulk-approve" || verb === "bulk-reject") {
     const ids = form.getAll("selected").map(Number);
     for (const id of ids) {
-      if (verb === "bulk-approve") await approve(env, id, form);
+      if (verb === "bulk-approve") await approveCandidate(env.DB, id, form);
       else await env.DB.prepare("UPDATE product_candidates SET status='rejected' WHERE id = ?").bind(id).run();
     }
     if (ids.length) {

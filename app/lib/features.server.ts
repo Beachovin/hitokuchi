@@ -1,5 +1,5 @@
 import type { ProductRow } from "./db.server";
-import { AREAS, limitedAreas, SEASONS } from "./features";
+import { AREAS, limitedAreas } from "./features";
 import { addDays, todayJst } from "./weeks";
 
 const SELECT = `SELECT p.id, p.name, m.name AS maker, c.name AS category, c.slug AS category_slug, c.emoji AS category_emoji,
@@ -21,12 +21,6 @@ export async function regionProducts(db: D1Database, slug: string) {
   return (await recentProducts(db)).filter((p) => limitedAreas(p.region).includes(slug));
 }
 
-export async function seasonProducts(db: D1Database, slug: string) {
-  const s = SEASONS.find((x) => x.slug === slug);
-  if (!s) return null;
-  return (await recentProducts(db)).filter((p) => s.pattern.test(`${p.name} ${p.description ?? ""}`));
-}
-
 /** 特集トップ用の件数とサムネイル */
 export async function featureOverview(db: D1Database) {
   const all = await recentProducts(db);
@@ -34,9 +28,5 @@ export async function featureOverview(db: D1Database) {
     const items = all.filter((p) => limitedAreas(p.region).includes(a.slug));
     return { slug: a.slug, name: a.name, emoji: a.emoji, count: items.length, thumbs: items.filter((p) => p.image_url).slice(0, 3).map((p) => p.image_url!) };
   });
-  const seasons = SEASONS.map((s) => {
-    const items = all.filter((p) => s.pattern.test(`${p.name} ${p.description ?? ""}`));
-    return { slug: s.slug, count: items.length, thumbs: items.filter((p) => p.image_url).slice(0, 4).map((p) => p.image_url!) };
-  });
-  return { regions, seasons };
+  return { regions };
 }

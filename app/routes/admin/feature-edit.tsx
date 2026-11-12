@@ -4,7 +4,7 @@ import { Form, Link, data, redirect, useFetcher } from "react-router";
 import type { Route } from "./+types/feature-edit";
 import { audit, requireAdmin } from "~/lib/admin.server";
 import { getCustomFeature } from "~/lib/custom-features.server";
-import { FEATURE_EMOJIS, SEASONS, THEMES, themeGradient } from "~/lib/features";
+import { FEATURE_EMOJIS, THEMES, themeGradient } from "~/lib/features";
 import { PageTitle, btn, input } from "~/components/admin-ui";
 
 type Item = { id: number; name: string; maker: string | null; image_url: string | null; released_on: string | null; category_emoji: string | null };
@@ -20,7 +20,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   };
 }
 
-const RESERVED = new Set(["region", ...SEASONS.map((s) => s.slug)]);
+const RESERVED = new Set(["region"]);
 
 export async function action({ params, request, context }: Route.ActionArgs) {
   const env = context.cloudflare.env;

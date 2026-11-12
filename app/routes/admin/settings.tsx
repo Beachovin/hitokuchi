@@ -25,6 +25,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     amazon_tag: /^[\w-]{1,40}$/.test(str("amazon_tag")) ? str("amazon_tag") : "",
     rakuten_affiliate_id: /^[\w.]{1,60}$/.test(str("rakuten_affiliate_id")) ? str("rakuten_affiliate_id") : "",
     use_claude: form.get("use_claude") === "on" ? "1" : "0",
+    auto_publish: form.get("auto_publish") === "on" ? "1" : "0",
     ai_summary_enabled: form.get("ai_summary_enabled") === "on" ? "1" : "0",
     digest_enabled: form.get("digest_enabled") === "on" ? "1" : "0",
     claude_model: CLAUDE_MODELS.some((m) => m.id === model) ? model : "claude-haiku-5-5",
@@ -67,6 +68,17 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             ⚠️ ANTHROPIC_API_KEY が未設定です。ON にしてもルール整形のみで実行されます（本番：<code>wrangler secret put ANTHROPIC_API_KEY</code>／ローカル：<code>.dev.vars</code>）。
           </p>
         )}
+
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl p-3 ring-1 ring-stone-200 has-[:checked]:bg-brand-50 has-[:checked]:ring-brand-300 dark:ring-white/10 dark:has-[:checked]:bg-brand-500/10">
+          <input type="checkbox" name="auto_publish" defaultChecked={settings.auto_publish} className="peer sr-only" />
+          <span className="relative mt-0.5 h-6 w-11 shrink-0 rounded-full bg-stone-300 transition after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition peer-checked:bg-brand-500 peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-brand-400 dark:bg-stone-700" />
+          <span>
+            <span className="block font-semibold">承認せずにそのまま公開する</span>
+            <span className="mt-0.5 block text-sm text-stone-500">
+              収集した商品を承認待ちにせず、すぐサイトに公開します。同じコンビニの公開済み商品（直近 60 日）や同時に集めた商品と名前がほぼ同じものは、重複の可能性ありとして自動で除外します。
+            </span>
+          </span>
+        </label>
 
         <label className="block">
           <span className="mb-1 block text-sm font-semibold">使用するモデル</span>
