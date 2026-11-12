@@ -229,3 +229,12 @@ npm run demo:remove:local  # 削除
 - 投稿のスパム対策（Turnstile、レート制限）
 - 承認待ちの絞り込み（チェーン別・カテゴリ別）
 - 詳細ページから kcal・アレルゲンを補完（取得件数が増えるので要検討）
+
+## 自動デプロイ（Cloudflare Workers Builds）
+
+GitHub `Beachovin/hitokuchi` の `main` にプッシュすると、Cloudflare が自動でビルドし、本番へデプロイします。
+
+- Build command: `npm run build`
+- Deploy command: `npx wrangler d1 migrations apply hitokuchi-db --remote && npx wrangler deploy`（新しいマイグレーションがあれば先に適用）
+- `main` 以外のブランチ: `npx wrangler versions upload`（プレビュー版のアップロードのみ。本番は変わりません）
+- ビルドログ: Cloudflare ダッシュボード → Workers & Pages → hitokuchi → Deployments
