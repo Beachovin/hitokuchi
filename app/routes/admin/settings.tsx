@@ -216,9 +216,9 @@ function RakutenCodeField({ name, label, saved, input: value, error }: { name: s
       {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
       {saved && !error && (
         <details className="mt-2">
-          <summary className="cursor-pointer text-xs font-semibold text-stone-500">保存済みの広告をプレビュー</summary>
+          <summary className="cursor-pointer text-xs font-semibold text-stone-500">保存済みの広告をプレビュー（楽天側の読み込みに10秒ほどかかることがあります）</summary>
           <div className="mt-2 rounded-xl bg-stone-50 p-3 dark:bg-white/5">
-            <RakutenAd sp={saved} pc={saved} preview />
+            <RakutenAd sp={saved} pc={saved} only={name === "rakuten_ad_pc" ? "pc" : "sp"} />
           </div>
         </details>
       )}

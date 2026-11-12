@@ -32,7 +32,24 @@ export function rakutenAdSize(code: string): { width: number; height: number } {
   return { width: 300, height: 250 };
 }
 
-/** iframe に入れる HTML。リンクは新しいタブで開く */
+/**
+ * 広告ページに付ける Content-Security-Policy。
+ * 楽天のドメイン以外からはスクリプト・iframe・通信を読み込めず、埋め込めるのも自サイトだけ。
+ */
+export const RAKUTEN_AD_CSP = [
+  "default-src 'none'",
+  "script-src 'unsafe-inline' https://*.rakuten.co.jp https://*.rakuten.com https://*.r10s.jp https://*.rakuten-static.com",
+  "frame-src https://*.rakuten.co.jp https://*.rakuten.com",
+  "connect-src https://*.rakuten.co.jp https://*.rakuten.com",
+  "img-src https: data:",
+  "style-src 'unsafe-inline' https://*.rakuten.co.jp https://*.r10s.jp",
+  "font-src https://*.rakuten.co.jp https://*.r10s.jp",
+  "base-uri 'self'",
+  "form-action 'none'",
+  "frame-ancestors 'self'",
+].join("; ");
+
+/** 広告ページの HTML。リンクは新しいタブで開く */
 export function rakutenAdDocument(code: string) {
   return `<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>html,body{margin:0;padding:0;overflow:hidden;background:transparent}img{max-width:100%;height:auto}</style></head><body>${code}</body></html>`;
 }

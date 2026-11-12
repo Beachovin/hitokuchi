@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { usePublicSettings } from "~/lib/monetize";
-import { rakutenAdDocument, rakutenAdSize } from "~/lib/rakuten-ad";
+import { rakutenAdSize } from "~/lib/rakuten-ad";
 
 declare global {
   interface Window {
@@ -40,24 +40,26 @@ function AdSense({ client, slot, format }: { client: string; slot: string; forma
 }
 
 /**
- * 楽天の画像広告。/ad/rakuten/:slot のページを、サイト本体から切り離した iframe（sandbox・別オリジン扱い）で読み込むので、
- * 広告のスクリプトはサイトの Cookie やページの中身に触れない。
- * スマホ用・PC 用のコードを画面幅で切り替え、枠より大きい広告は縮小して収める。
+ * 楽天の画像広告。/ad/rakuten/:slot のページを iframe で読み込む。
+ * 楽天のウィジェットは中で楽天の iframe を動かすため、sandbox は「同じオリジンとして動かす」ことも許可している。
+ * その代わり、広告ページ側の Content-Security-Policy で、楽天以外のスクリプトや通信を読み込めないようにしている。
+ * スマホ用・PC 用のコードを画面幅で切り替え（only を指定するとそのコードに固定）、枠より大きい広告は縮小して収める。
  */
-export function RakutenAd({ sp, pc, preview = false }: { sp: string; pc: string; preview?: boolean }) {
+export function RakutenAd({ sp, pc, only }: { sp: string; pc: string; only?: "sp" | "pc" }) {
   const box = useRef<HTMLDivElement>(null);
-  const [slot, setSlot] = useState<"sp" | "pc" | null>(null);
-  const code = slot === "pc" ? pc || sp : slot === "sp" ? sp || pc : null;
+  const [slot, setSlot] = useState<"sp" | "pc" | null>(only ?? null);
   const [scale, setScale] = useState(1);
+  const code = slot === "pc" ? pc || sp : slot === "sp" ? sp || pc : null;
 
   // 画面幅で使うコードを決める（サーバー側の描画では出さない）
   useEffect(() => {
+    if (only) return;
     const mq = window.matchMedia("(min-width: 768px)");
     const pick = () => setSlot(sp || pc ? (mq.matches ? "pc" : "sp") : null);
     pick();
     mq.addEventListener("change", pick);
     return () => mq.removeEventListener("change", pick);
-  }, [sp, pc]);
+  }, [sp, pc, only]);
 
   const size = code ? rakutenAdSize(code) : null;
   useEffect(() => {
@@ -71,13 +73,13 @@ export function RakutenAd({ sp, pc, preview = false }: { sp: string; pc: string;
 
   return (
     <div ref={box} className="flex w-full justify-center overflow-hidden" style={{ height: size ? Math.ceil(size.height * scale) : 0 }}>
-      {code && size && (
+      {code && size && slot && (
         <iframe
+          // 設定を保存し直したら読み込み直す
+          key={code}
           title="楽天の広告"
-          // 通常はサイト上の広告ページを読み込む（楽天のウィジェットはページの URL が必要）。管理画面のプレビューだけはその場のコードで表示
-          {...(preview ? { srcDoc: rakutenAdDocument(code) } : { src: `/ad/rakuten/${slot}` })}
-          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
-          referrerPolicy="no-referrer-when-downgrade"
+          src={`/ad/rakuten/${slot}?v=${code.length}`}
+          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
           loading="lazy"
           scrolling="no"
           width={size.width}
