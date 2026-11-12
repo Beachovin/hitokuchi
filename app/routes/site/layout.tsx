@@ -2,6 +2,7 @@ import { Form, Link, NavLink, Outlet, useLocation, useRouteLoaderData, useSearch
 import { Logo } from "~/components/logo";
 import { TabBar } from "~/components/tab-bar";
 import { PwaManager } from "~/components/pwa";
+import { WelcomeGuide } from "~/components/welcome";
 
 type RootData = { viewer: { nickname: string | null; avatarUrl: string | null } | null; bookmarks: number[]; unread: number };
 
@@ -103,6 +104,7 @@ export default function SiteLayout() {
           <Link to="/weekly" className="hover:text-stone-900 dark:hover:text-white">週間まとめ</Link>
           <Link to="/features" className="hover:text-stone-900 dark:hover:text-white">特集</Link>
           <Link to="/products" className="hover:text-stone-900 dark:hover:text-white">商品一覧</Link>
+          <Link to="/about" className="hover:text-stone-900 dark:hover:text-white">ひとくちとは</Link>
           <Link to="/terms" className="hover:text-stone-900 dark:hover:text-white">利用規約</Link>
           <Link to="/privacy" className="hover:text-stone-900 dark:hover:text-white">プライバシーポリシー</Link>
         </nav>
@@ -110,11 +112,12 @@ export default function SiteLayout() {
       </footer>
       {/* スマホ用の小さなフッター（タブバーの上） */}
       <p className="pb-tabbar px-4 pt-10 text-center text-[11px] text-stone-400 md:hidden">
-        <Link to="/terms" className="underline">利用規約</Link>　<Link to="/privacy" className="underline">プライバシーポリシー</Link>　掲載情報は各社の公開情報にもとづきます
+        <Link to="/about" className="underline">ひとくちとは</Link>　<Link to="/terms" className="underline">利用規約</Link>　<Link to="/privacy" className="underline">プライバシーポリシー</Link>　掲載情報は各社の公開情報にもとづきます
       </p>
 
       <TabBar loggedIn={!!viewer} favCount={favCount} />
       <PwaManager />
+      <WelcomeGuide loggedIn={!!viewer} />
     </div>
   );
 }

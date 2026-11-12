@@ -14,6 +14,7 @@ npm test
 | `test/unit/adapters.test.ts` | 単体 | 5 社のアダプターが一覧・詳細から正しく取り出せること、ページ構造が変わったら 0 件になること |
 | `test/unit/fetch.test.ts` | 単体 | 更新検知のハッシュ、条件付きリクエスト（304）、エラー応答、robots.txt の解釈 |
 | `test/unit/security.test.ts` | 単体 | CSRF 判定、セキュリティヘッダー、画像の配信ヘッダー、画像形式の判定（SVG・HTML の拒否） |
+| `test/unit/welcome.test.ts` | 単体 | ようこそガイドを出す・出さないの判定 |
 | `test/unit/rules.test.ts` | 単体 | ランクとポイント、週の計算、表示の整形、地域限定の判定、ニックネーム、戻り先 URL、NG ワード、アフィリエイトリンク、AI 要約の条件 |
 | `test/integration/schema.test.ts` | 結合 | 全マイグレーションの適用、収集元が公式ドメインだけであること、設定の初期値と保存 |
 | `test/integration/candidates.test.ts` | 結合 | 候補の承認（商品・販売店・検索データの作成、手直しの反映、重複のマージ）、自動公開と重複除外 |

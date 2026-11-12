@@ -17,6 +17,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
     { loc: `${origin}/weekly`, changefreq: "weekly", priority: "0.8" },
     { loc: `${origin}/features`, changefreq: "weekly", priority: "0.6" },
     ...features.map((f) => ({ loc: `${origin}/features/${f.slug}`, changefreq: "weekly", priority: "0.6" })),
+    { loc: `${origin}/about`, changefreq: "monthly", priority: "0.5" },
     { loc: `${origin}/terms`, changefreq: "yearly", priority: "0.2" },
     { loc: `${origin}/privacy`, changefreq: "yearly", priority: "0.2" },
     ...weeks.map((w) => ({ loc: `${origin}/weekly/${w.week}`, changefreq: "weekly", priority: "0.7" })),

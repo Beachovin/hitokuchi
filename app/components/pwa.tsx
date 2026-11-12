@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { safeGet, safeSet } from "~/lib/client-storage";
+import { WELCOME_SEEN_KEY } from "~/lib/welcome";
 
 /**
  * PWA：Service Worker の登録・更新のお知らせ・ホーム画面への追加の案内
@@ -59,18 +61,6 @@ type BeforeInstallPromptEvent = Event & { prompt: () => Promise<void>; userChoic
 const DISMISS_KEY = "hk_install_dismissed_at";
 const VIEWS_KEY = "hk_page_views";
 
-function safeGet(store: Storage | undefined, k: string) {
-  try {
-    return store?.getItem(k) ?? null;
-  } catch {
-    return null;
-  }
-}
-function safeSet(store: Storage | undefined, k: string, v: string) {
-  try {
-    store?.setItem(k, v);
-  } catch {}
-}
 
 /** ホーム画面への追加の案内（スマホ・ブラウザ表示中・2 ページ目以降・閉じたら 30 日表示しない） */
 function InstallPrompt() {
@@ -81,6 +71,8 @@ function InstallPrompt() {
     const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone;
     const mobile = window.matchMedia("(max-width: 767px)").matches;
     if (standalone || !mobile) return;
+    // ようこそガイドをまだ閉じていない人には、ガイドと重ならないよう出さない
+    if (!safeGet(window.localStorage, WELCOME_SEEN_KEY)) return;
     const dismissed = Number(safeGet(window.localStorage, DISMISS_KEY) ?? 0);
     if (Date.now() - dismissed < 30 * 86400_000) return;
     const views = Number(safeGet(window.sessionStorage, VIEWS_KEY) ?? 0) + 1;
