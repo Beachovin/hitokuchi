@@ -1,0 +1,24 @@
+{
+  "name": "ひとくち｜コンビニ新商品の口コミ",
+  "short_name": "ひとくち",
+  "description": "コンビニの新商品を、食べた人のリアルな口コミでチェック。",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff8f1",
+  "theme_color": "#fff8f1",
+  "lang": "ja",
+  "categories": ["food", "lifestyle", "shopping"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "口コミを書く", "short_name": "口コミ", "url": "/post?source=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "今週の新商品", "short_name": "今週", "url": "/weekly?source=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "気になる", "url": "/favorites?source=pwa", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

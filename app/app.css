@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme {
+  /* アプリ風：丸ゴシックで統一（管理画面は読みやすさ優先で Noto Sans JP） */
+  --font-sans: "Zen Maru Gothic", "Noto Sans JP", ui-rounded, system-ui, sans-serif;
+  --font-display: "Zen Maru Gothic", "Noto Sans JP", sans-serif;
+  --font-admin: "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
+  --color-cream: #fff8f1;
+  --color-cream-200: #f6e8d9;
+  --color-brand-50: #fff7ed;
+  --color-brand-100: #ffedd5;
+  --color-brand-400: #fb923c;
+  --color-brand-500: #f97316;
+  --color-brand-600: #ea580c;
+  --color-ink: #1c1917;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root { color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { color-scheme: dark; } }
+
+body {
+  @apply bg-cream text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100;
+  font-feature-settings: "palt";
+}
+
+.glass {
+  @apply bg-white/70 backdrop-blur-xl border border-white/60 dark:bg-stone-900/60 dark:border-white/10;
+}
+
+.card-lift {
+  transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s;
+}
+.card-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 24px 48px -16px rgb(0 0 0 / .18);
+}
+
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise .6s cubic-bezier(.2,.8,.2,1) both; }
+
+@keyframes blob {
+  0%,100% { transform: translate(0,0) scale(1); }
+  33% { transform: translate(30px,-20px) scale(1.08); }
+  66% { transform: translate(-20px,15px) scale(.95); }
+}
+.blob { animation: blob 14s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rise, .blob { animation: none; }
+  .card-lift:hover { transform: none; }
+}
+
+/* ===== レビュアーランク（プラチナ） ===== */
+@keyframes tier-shine { to { --tier-angle: 360deg; } }
+@property --tier-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+.tier-platinum-ring {
+  background: conic-gradient(from var(--tier-angle), #a78bfa, #67e8f9, #f0abfc, #fde68a, #a78bfa);
+  animation: tier-shine 4s linear infinite;
+}
+.tier-platinum-text {
+  background-image: linear-gradient(90deg, #7c3aed, #06b6d4, #db2777, #7c3aed);
+  background-size: 200% auto;
+  animation: tier-text 5s linear infinite;
+}
+@keyframes tier-text { to { background-position: 200% center; } }
+.tier-platinum-chip { background: linear-gradient(90deg, #7c3aed, #0891b2, #db2777); }
+.tier-platinum-card {
+  position: relative;
+  background:
+    linear-gradient(var(--tw-card-bg, #fff), var(--tw-card-bg, #fff)) padding-box,
+    conic-gradient(from var(--tier-angle), #a78bfa, #67e8f9, #f0abfc, #fde68a, #a78bfa) border-box;
+  border: 2px solid transparent;
+  animation: tier-shine 6s linear infinite;
+}
+.dark .tier-platinum-card, :root:where(.dark) .tier-platinum-card { --tw-card-bg: #1c1917; }
+@media (prefers-reduced-motion: reduce) {
+  .tier-platinum-ring, .tier-platinum-text, .tier-platinum-card { animation: none; }
+}
+
+/* ロゴマークのゆらゆら */
+@keyframes logo-bob { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
+.logo-bob { animation: logo-bob 3.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .logo-bob { animation: none; } }
+
+/* 横スクロールの棚（スクロールバーを隠す） */
+.shelf { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.shelf::-webkit-scrollbar { display: none; }
+/* 下部タブバーの分だけ余白（iPhone のホームバーにも対応） */
+.pb-tabbar { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+@media (min-width: 768px) { .pb-tabbar { padding-bottom: 0; } }

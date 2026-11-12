@@ -1,0 +1,48 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hitokuchi",
+  "main": "./workers/app.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // 商品・レビュー・収集データ
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hitokuchi-db",
+      "database_id": "cbadd886-c3ec-4cab-9a6d-49d4cebc0d8b",
+      "migrations_dir": "db/migrations"
+    }
+  ],
+
+  // レビュー写真など
+  "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "hitokuchi-images" }],
+
+  // 収集パイプライン（毎朝 6:00 JST = 21:00 UTC）
+  "workflows": [
+    { "name": "scrape-workflow", "binding": "SCRAPE_WORKFLOW", "class_name": "ScrapeWorkflow" }
+  ],
+  // 毎朝 6:00 JST：新商品の収集・通知の生成／月曜 8:00 JST：ダイジェスト配信
+  "triggers": { "crons": ["0 21 * * *", "0 23 * * SUN"] },
+
+  "vars": {
+    // 管理画面を別ドメインでだけ開く場合に指定（例: admin.example.com）。他のドメインの /admin は 404
+    "ADMIN_HOST": "",
+    // "true" にすると Cloudflare Access の認証メールとログイン中のメールの一致も必須にする（推奨）
+    "ADMIN_REQUIRE_ACCESS": "",
+    // 管理者として操作できるのはログインから何時間以内か（それ以降は再ログイン）
+    "ADMIN_SESSION_HOURS": "12",
+    // 本番では必ず空。ローカル開発では .dev.vars の ADMIN_DEV_BYPASS=true で上書きする
+    "ADMIN_DEV_BYPASS": "",
+    "EXTRACT_MODEL": "claude-haiku-5-5",
+    // Google ログイン（Google Cloud Console で作成した OAuth クライアント ID）
+    "GOOGLE_CLIENT_ID": "291670082685-l220m8oih2j6q38fh7181lp2nvrco9kd.apps.googleusercontent.com",
+    // ダイジェストメールの送信元（Resend で認証済みのドメインのアドレス）
+    "DIGEST_FROM": "",
+    // メール内リンクの基準 URL（例: https://hitokuchi.example.com）
+    "SITE_ORIGIN": "https://hitokuchi.ak-lumina-inc.workers.dev"
+  }
+  // シークレット（`wrangler secret put <名前>`、ローカルは .dev.vars）:
+  //   ANTHROPIC_API_KEY, GOOGLE_CLIENT_SECRET, RESEND_API_KEY（ダイジェストメール）
+}

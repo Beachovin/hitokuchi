@@ -1,0 +1,10 @@
+node_modules
+build
+.react-router
+.wrangler
+.dev.vars
+worker-configuration.d.ts
+db/demo/demo.sql
+db/demo/avatars/
+tsconfig.tsbuildinfo
+.DS_Store
