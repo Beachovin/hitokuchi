@@ -53,6 +53,8 @@ flowchart LR
 | `npm test` / `npm run test:watch` | テスト |
 | `npm run typecheck` | 型チェック |
 | `npm run check` | 型チェック → テスト → ビルドをまとめて実行 |
+| `npm run lock:check` | `package-lock.json` が Cloudflare のビルド環境（npm 10）でも使えるか確認 |
+| `npm run lock:refresh` | パッケージを足したあとに `package-lock.json` を作り直す |
 | `npm run db:migrate:local` | ローカルの DB にマイグレーションを適用 |
 | `npm run deploy` | 手元から直接デプロイ（通常は使わない。プッシュで自動デプロイされる） |
 
@@ -83,6 +85,7 @@ flowchart LR
 | 自分以外がログインできない | Google の同意画面が「テスト」のまま | Google Cloud Console で「本番環境」に切り替える |
 | 管理画面に入れない | メールが `ADMIN_EMAILS` と違う、またはログインから 12 時間を過ぎた | メールを確認し、ログインし直す |
 | プッシュしたのに反映されない | テストかビルドが失敗している | GitHub のチェックか Workers Builds のログを見る |
+| ビルドが `npm ci` の「Missing: … from lock file」で失敗する | 手元（npm 11）でパッケージを足すと、npm 10 が必要とする記録が `package-lock.json` から抜けることがある | `npm run lock:refresh` で作り直してプッシュする。CI の「package-lock.json の確認」でも検知される |
 | デプロイ後に画面がおかしい | 不具合のあるコードが出た | Cloudflare ダッシュボードの Deployments で前のバージョンにロールバックし、あとで直してプッシュする |
 | Service Worker が原因で古い画面が出続ける | キャッシュの不整合 | `public/sw.js` の `KILL_SWITCH` を `true` にしてデプロイする |
 | 間違って商品や口コミを消した | — | D1 の Time Travel で過去の時点に戻せる（無料プランは 7 日以内、有料プランは 30 日以内）（`npx wrangler d1 time-travel restore hitokuchi-db --timestamp=<日時>`）。DB 全体が戻るので、実行前に影響を確認する |

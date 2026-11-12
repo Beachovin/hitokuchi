@@ -24,6 +24,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      # Cloudflare のビルド環境は npm 10。そちらでもインストールできることを先に確かめる
+      - name: package-lock.json の確認（npm 10）
+        run: npm run lock:check
       - run: npm ci
       - name: 型チェック
         run: npm run typecheck
