@@ -230,11 +230,18 @@ npm run demo:remove:local  # 削除
 - 承認待ちの絞り込み（チェーン別・カテゴリ別）
 - 詳細ページから kcal・アレルゲンを補完（取得件数が増えるので要検討）
 
+## 設計書・テスト
+
+- 設計書（要件定義・機能設計・外部設計・内部設計・設定一覧・テストと運用）は [docs/](docs/README.md) にあります。
+- 自動テスト：`npm test`（Vitest。本番と同じ Workers ランタイム上で、D1・R2 を使う結合テストも実行）
+- まとめて確認：`npm run check`（型チェック → テスト → ビルド）
+- `main` へのプッシュ時は、GitHub Actions と Cloudflare Workers Builds の両方でテストが走り、失敗すると本番にはデプロイされません。
+
 ## 自動デプロイ（Cloudflare Workers Builds）
 
 GitHub `Beachovin/hitokuchi` の `main` にプッシュすると、Cloudflare が自動でビルドし、本番へデプロイします。
 
-- Build command: `npm run build`
+- Build command: `npm run build`（Workers Builds の中では、ビルドの前に型チェックとテストが自動で走る）
 - Deploy command: `npx wrangler d1 migrations apply hitokuchi-db --remote && npx wrangler deploy`（新しいマイグレーションがあれば先に適用）
 - `main` 以外のブランチ: `npx wrangler versions upload`（プレビュー版のアップロードのみ。本番は変わりません）
 - ビルドログ: Cloudflare ダッシュボード → Workers & Pages → hitokuchi → Deployments

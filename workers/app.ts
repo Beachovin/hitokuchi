@@ -5,7 +5,8 @@ import { sendWeeklyDigests } from "../app/lib/digest.server";
 import { getSettings } from "../app/lib/settings.server";
 import { addDays, mondayOf, todayJst } from "../app/lib/weeks";
 import { generateWeeklyBattles } from "../app/lib/battles.server";
-import { purgeOldProducts } from "../app/lib/retention.server";
+import { runMaintenance } from "../app/lib/retention.server";
+import { imageHeaders, isCrossSiteWrite, withSecurityHeaders } from "./security";
 
 declare module "react-router" {
   export interface AppLoadContext {
@@ -27,20 +28,11 @@ export default {
       if (!obj) return new Response("Not found", { status: 404 });
       const headers = new Headers();
       obj.writeHttpMetadata(headers);
-      headers.set("cache-control", "public, max-age=31536000, immutable");
-      return new Response(obj.body, { headers });
+      return new Response(obj.body, { headers: imageHeaders(headers) });
     }
+    if (isCrossSiteWrite(request)) return new Response("不正なリクエストです", { status: 403 });
     const res = await requestHandler(request, { cloudflare: { env, ctx } });
-    if (url.pathname === "/admin" || url.pathname.startsWith("/admin/")) {
-      // 管理画面は検索エンジンに載せない・キャッシュしない・他サイトに埋め込ませない
-      const h = new Headers(res.headers);
-      h.set("X-Robots-Tag", "noindex, nofollow");
-      h.set("Cache-Control", "private, no-store");
-      h.set("X-Frame-Options", "DENY");
-      h.set("Referrer-Policy", "same-origin");
-      return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
-    }
-    return res;
+    return withSecurityHeaders(res, url);
   },
 
   async scheduled(event, env, ctx) {
@@ -60,7 +52,7 @@ export default {
     // 今週の新商品バトル（ジャンルごと・まだ無いジャンルだけ追加）
     const week = mondayOf(todayJst());
     ctx.waitUntil(generateWeeklyBattles(env.DB, week, addDays(week, 6)).then(() => {}));
-    // 発売から 1 か月を過ぎた商品（と口コミ等）を削除
-    ctx.waitUntil(purgeOldProducts(env).then((r) => console.log("purge", r)).catch((e) => console.error("purge failed", e)));
+    // 後片付け：発売から 1 か月を過ぎた商品・使われていない画像・期限切れのセッションなどを削除
+    ctx.waitUntil(runMaintenance(env).then((r) => console.log("maintenance", JSON.stringify(r))));
   },
 } satisfies ExportedHandler<Env>;

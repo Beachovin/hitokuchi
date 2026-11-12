@@ -67,7 +67,9 @@ export function parseDate(s: string | null, today = new Date()) {
 
 export function parseKcal(s: string | null) {
   if (!s) return null;
-  const n = Number(s.normalize("NFKC").replace(/,/g, "").match(/[\d.]+/)?.[0]);
+  const t = s.normalize("NFKC").replace(/,/g, "");
+  // 「1個当たり291kcal」のように他の数字が混じるときは kcal の直前の数字を優先する
+  const n = Number(t.match(/([\d.]+)\s*kcal/i)?.[1] ?? t.match(/[\d.]+/)?.[0]);
   return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
 }
 

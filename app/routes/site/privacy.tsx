@@ -1,9 +1,16 @@
+import { Link } from "react-router";
 import type { Route } from "./+types/privacy";
+import { usePublicSettings } from "~/lib/monetize";
+import { OperatorInfo } from "~/components/operator-info";
 
-export const meta: Route.MetaFunction = () => [{ title: "プライバシーポリシー・外部送信について｜ひとくち" }];
+export const meta: Route.MetaFunction = () => [
+  { title: "プライバシーポリシー・外部送信について｜ひとくち" },
+  { name: "description", content: "ひとくちが取得する情報と利用目的、広告・アフィリエイト、外部送信についての説明です。" },
+];
 
-// 電気通信事業法の外部送信規律に基づく公表事項を含むページ。運営者情報は公開前に必ず記入すること。
+// 電気通信事業法の外部送信規律に基づく公表事項を含むページ。運営者情報は管理画面の「設定」で入力する。
 export default function Privacy() {
+  const s = usePublicSettings();
   return (
     <article className="mx-auto max-w-3xl px-4 pt-4 md:pt-10 leading-relaxed text-stone-700 dark:text-stone-300">
       <h1 className="font-display text-3xl font-black text-stone-900 dark:text-white">プライバシーポリシー</h1>
@@ -15,7 +22,7 @@ export default function Privacy() {
       </ul>
       <p className="mt-3">
         これらはログイン状態の管理と本人確認、お問い合わせ対応にのみ利用し、サイト上には公開しません。口コミに表示されるのは、ご自身で設定したニックネームのみです。
-        ログイン状態の維持のため Cookie（セッション情報）を使用します。マイページの「退会する」から、アカウントと口コミ・Good / Bad をいつでも削除できます。
+        ログイン状態の維持のため Cookie（セッション情報）を使用します。プロフィール画像・口コミの写真は、アップロード時に端末側で縮小・再圧縮され、位置情報などの付帯情報は保存されません。マイページの「退会する」から、アカウントと口コミ・Good / Bad をいつでも削除できます。
       </p>
 
       <h2 className="mt-10 text-xl font-bold text-stone-900 dark:text-white">広告・アフィリエイトについて</h2>
@@ -51,7 +58,8 @@ export default function Privacy() {
       <p className="mt-3">商品名・価格・画像などは各社の公開情報をもとに掲載しています。最新の情報は各社の公式サイトをご確認ください。</p>
 
       <h2 className="mt-10 text-xl font-bold text-stone-900 dark:text-white">運営者・お問い合わせ</h2>
-      <p className="mt-3 text-stone-400">（公開前に運営者名と連絡先を記入してください）</p>
+      <OperatorInfo name={s?.operator_name} contact={s?.operator_contact} />
+      <p className="mt-6 text-sm"><Link to="/terms" className="underline">利用規約</Link>もあわせてご確認ください。</p>
     </article>
   );
 }

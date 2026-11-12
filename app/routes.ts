@@ -12,6 +12,7 @@ export default [
     route("features/region/:slug", "routes/site/features/region.tsx"),
     route("features/:slug", "routes/site/features/season.tsx"),
     route("privacy", "routes/site/privacy.tsx"),
+    route("terms", "routes/site/terms.tsx"),
     route("login", "routes/site/login.tsx"),
     route("mypage", "routes/site/mypage.tsx"),
     route("favorites", "routes/site/favorites.tsx"),

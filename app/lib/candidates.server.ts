@@ -1,5 +1,6 @@
 // 候補（スクレイピング結果）を商品として公開する処理。管理画面の承認と自動公開の両方で使う
 import { syncProductFts, upsertMaker } from "./db.server";
+import { DUPLICATE_THRESHOLD, nameSimilarity } from "../../workers/scrape/normalize";
 
 type Candidate = {
   id: number;
@@ -68,4 +69,40 @@ export async function approveCandidate(DB: D1Database, id: number, overrides: Fo
     await DB.prepare("INSERT OR IGNORE INTO product_channels VALUES (?, ?)").bind(productId, c.channel_id).run();
   }
   await DB.prepare("UPDATE product_candidates SET status = 'approved', duplicate_of = ? WHERE id = ?").bind(productId, id).run();
+}
+
+/**
+ * 保存した候補を公開する。同じチェーンの公開済み商品（直近 60 日）や、今回の候補同士で
+ * 名前がほぼ同じものは重複の可能性ありとして公開せず「却下」にする（理由を note に残す）。
+ */
+export async function autoPublish(DB: D1Database, ids: number[], chainLabel: string) {
+  const ph = ids.map(() => "?").join(",");
+  const { results: cands } = await DB.prepare(`SELECT id, name FROM product_candidates WHERE id IN (${ph}) AND status = 'pending' ORDER BY id`)
+    .bind(...ids)
+    .all<{ id: number; name: string }>();
+  const { results: existing } = await DB.prepare(
+    `SELECT p.id, p.name FROM products p JOIN makers m ON m.id = p.maker_id
+     WHERE m.name = ? AND p.created_at >= datetime('now', '-60 days')`,
+  )
+    .bind(chainLabel)
+    .all<{ id: number; name: string }>();
+  const pool = [...existing];
+  let published = 0;
+  let duplicates = 0;
+  for (const c of cands) {
+    const dup = pool.find((p) => nameSimilarity(p.name, c.name) >= DUPLICATE_THRESHOLD);
+    if (dup) {
+      await DB.prepare("UPDATE product_candidates SET status = 'rejected', duplicate_of = NULL, note = ? WHERE id = ?")
+        .bind(`自動排除：重複の可能性（${dup.name}）`, c.id)
+        .run();
+      duplicates++;
+      continue;
+    }
+    // 別チェーンの同名商品とは統合しない（チェーンごとに別の商品として公開）
+    await DB.prepare("UPDATE product_candidates SET duplicate_of = NULL, note = '自動公開' WHERE id = ?").bind(c.id).run();
+    await approveCandidate(DB, c.id, null);
+    pool.push({ id: -c.id, name: c.name });
+    published++;
+  }
+  return { published, duplicates };
 }

@@ -30,4 +30,4 @@ export const AVATAR_STORE_MAX_BYTES = 100 * 1024;
 export const AVATAR_PX = 240;
 /** 圧縮の目標サイズ（これを下回るまで画質を段階的に下げる） */
 export const AVATAR_TARGET_BYTES = 20 * 1024;
-export const AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+export { IMAGE_TYPES as AVATAR_TYPES } from "./image";

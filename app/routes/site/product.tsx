@@ -21,6 +21,10 @@ import { ShareButtons } from "~/components/share-buttons";
 import { BookmarkButton } from "~/components/bookmark-button";
 import { EatenButton } from "~/components/eaten-button";
 import { QuickReview } from "~/components/quick-review";
+import { PhotoInput } from "~/components/photo-input";
+import { REVIEW_IMAGE_STORE_MAX_BYTES, sniffImage } from "~/lib/image";
+
+const REVIEWS_PER_DAY = 30;
 
 export const meta: Route.MetaFunction = ({ data }) =>
   data
@@ -82,7 +86,6 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   return { product, reviews, stats, channels, sort, url, viewer, loginHref, returnPath, bookmarkCount, eatenCount, reviewedByMe, firstChance, summary, summaryMin: SUMMARY_MIN_REVIEWS };
 }
 
-const MAX_IMAGE = 5 * 1024 * 1024;
 
 export async function action({ params, request, context }: Route.ActionArgs) {
   const { DB, IMAGES } = context.cloudflare.env;
@@ -145,24 +148,29 @@ export async function action({ params, request, context }: Route.ActionArgs) {
     if (body.length > 1000) errors.body = "口コミは1000文字以内で入力してください";
   }
 
-  let imageKey: string | null = null;
+  // 写真は端末側で圧縮済みのものだけ受け付ける。形式は中身（先頭バイト）で確認する
+  let image: { key: string; buf: Uint8Array; type: string } | null = null;
   const file = form.get("image");
   if (file instanceof File && file.size > 0) {
-    if (!file.type.startsWith("image/")) errors.image = "画像ファイルを選んでください";
-    else if (file.size > MAX_IMAGE) errors.image = "画像は5MB以下にしてください";
+    if (file.size > REVIEW_IMAGE_STORE_MAX_BYTES) errors.image = "画像を縮小できませんでした。別の画像を選ぶか、ブラウザを更新してもう一度お試しください";
     else {
-      imageKey = `reviews/${productId}/${crypto.randomUUID()}.${file.type.split("/")[1] ?? "jpg"}`;
+      const buf = new Uint8Array(await file.arrayBuffer());
+      const type = sniffImage(buf);
+      if (!type) errors.image = "JPEG・PNG・WebP・GIF の画像を選んでください";
+      else image = { key: `reviews/${productId}/${crypto.randomUUID()}.${type.split("/")[1]}`, buf, type };
     }
   }
   if (Object.keys(errors).length) return data({ ok: false as const, intent: "review" as const, errors }, { status: 400 });
 
-  if (imageKey && file instanceof File) {
-    await IMAGES.put(imageKey, file.stream(), { httpMetadata: { contentType: file.type } });
-  }
   const recent = await DB.prepare("SELECT COUNT(*) AS n FROM reviews WHERE reviewer_id = ? AND product_id = ? AND created_at >= datetime('now', '-1 day')")
     .bind(user.id, productId)
     .first<{ n: number }>();
   if ((recent?.n ?? 0) >= 1) return data({ ok: false as const, intent: "review" as const, errors: { form: "同じ商品への口コミは1日1件までです" } as Record<string, string> }, { status: 429 });
+  // 連投対策：1 人 1 日 30 件まで
+  const today = await DB.prepare("SELECT COUNT(*) AS n FROM reviews WHERE reviewer_id = ? AND created_at >= datetime('now', '-1 day')").bind(user.id).first<{ n: number }>();
+  if ((today?.n ?? 0) >= REVIEWS_PER_DAY) return data({ ok: false as const, intent: "review" as const, errors: { form: "1日に投稿できる口コミの上限に達しました。明日またお願いします" } as Record<string, string> }, { status: 429 });
+  const imageKey = image && !quick ? image.key : null;
+  if (image && imageKey) await IMAGES.put(imageKey, image.buf, { httpMetadata: { contentType: image.type } });
   const status = needsReview(`${title} ${body} ${nickname}`) ? "flagged" : "published";
   // ファーストレビュー：まだ公開口コミが無く、発売（または掲載）から 3 日以内の最初の口コミ
   const fr = await DB.prepare(
@@ -177,7 +185,7 @@ export async function action({ params, request, context }: Route.ActionArgs) {
   await DB.prepare(
     "INSERT INTO reviews(product_id, nickname, rating, taste, volume, value, title, body, image_key, status, reviewer_id, is_first, is_quick) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
   )
-    .bind(productId, nickname, rating, quick ? null : axis("taste"), quick ? null : axis("volume"), quick ? null : axis("value"), quick ? null : title || null, body, quick ? null : imageKey, status, user.id, isFirst ? 1 : 0, quick ? 1 : 0)
+    .bind(productId, nickname, rating, quick ? null : axis("taste"), quick ? null : axis("volume"), quick ? null : axis("value"), quick ? null : title || null, body, imageKey, status, user.id, isFirst ? 1 : 0, quick ? 1 : 0)
     .run();
   await setEaten(DB, user.id, productId, true);
   await recalcProductRating(DB, productId);
@@ -552,11 +560,7 @@ function ReviewForm({ viewer, loginHref, returnPath }: { viewer: { nickname: str
           <textarea id="body" name="body" rows={5} maxLength={1000} className={field} placeholder="味・食感・おすすめポイントなど" />
           {errors.body && <p className="mt-1 text-xs text-rose-600">{errors.body}</p>}
         </div>
-        <div>
-          <label className="mb-1.5 block text-sm font-semibold" htmlFor="image">写真（任意・5MBまで）</label>
-          <input id="image" name="image" type="file" accept="image/*" className="block w-full text-sm file:mr-3 file:rounded-full file:border-0 file:bg-stone-900 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white dark:file:bg-white dark:file:text-stone-900" />
-          {errors.image && <p className="mt-1 text-xs text-rose-600">{errors.image}</p>}
-        </div>
+        <PhotoInput error={errors.image} />
         <button
           disabled={fetcher.state !== "idle"}
           className="w-full rounded-xl bg-stone-900 py-3 font-semibold text-white transition hover:bg-stone-700 disabled:opacity-60 dark:bg-white dark:text-stone-900"

@@ -25,6 +25,8 @@ export async function action({ request, context }: Route.ActionArgs) {
     amazon_tag: /^[\w-]{1,40}$/.test(str("amazon_tag")) ? str("amazon_tag") : "",
     rakuten_affiliate_id: /^[\w.]{1,60}$/.test(str("rakuten_affiliate_id")) ? str("rakuten_affiliate_id") : "",
     use_claude: form.get("use_claude") === "on" ? "1" : "0",
+    operator_name: str("operator_name").slice(0, 80),
+    operator_contact: /^(https:\/\/\S{1,200}|[^\s@]{1,64}@[^\s@]{1,190})$/.test(str("operator_contact")) ? str("operator_contact") : "",
     auto_publish: form.get("auto_publish") === "on" ? "1" : "0",
     ai_summary_enabled: form.get("ai_summary_enabled") === "on" ? "1" : "0",
     digest_enabled: form.get("digest_enabled") === "on" ? "1" : "0",
@@ -145,6 +147,21 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             <input name="rakuten_affiliate_id" defaultValue={settings.rakuten_affiliate_id} placeholder="0000000.00000000" className={input} />
           </label>
         </div>
+      </Panel>
+
+      <Panel className="mt-6 space-y-5">
+        <div>
+          <h2 className="font-bold">運営者情報</h2>
+          <p className="mt-1 text-sm text-stone-500">プライバシーポリシーと利用規約に表示されます。広告（AdSense）やアフィリエイトの審査では、運営者と連絡先の記載が求められます。</p>
+        </div>
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold">運営者名（個人名・屋号・法人名）</span>
+          <input name="operator_name" maxLength={80} defaultValue={settings.operator_name} className={input} placeholder="例：ひとくち運営事務局" />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold">お問い合わせ先（メールアドレス、または https:// で始まるフォームの URL）</span>
+          <input name="operator_contact" maxLength={200} defaultValue={settings.operator_contact} className={input} placeholder="例：contact@example.com" />
+        </label>
       </Panel>
     </Form>
   );

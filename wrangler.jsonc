@@ -16,14 +16,14 @@
     }
   ],
 
-  // レビュー写真など
+  // 口コミの写真・プロフィール画像（端末側で圧縮したもの）
   "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "hitokuchi-images" }],
 
   // 収集パイプライン（毎朝 6:00 JST = 21:00 UTC）
   "workflows": [
     { "name": "scrape-workflow", "binding": "SCRAPE_WORKFLOW", "class_name": "ScrapeWorkflow" }
   ],
-  // 毎朝 6:00 JST：新商品の収集・通知の生成／月曜 8:00 JST：ダイジェスト配信
+  // 毎朝 6:00 JST：収集元の更新確認と取り込み・通知・バトル作成・後片付け／月曜 8:00 JST：ダイジェスト配信
   "triggers": { "crons": ["0 21 * * *", "0 23 * * SUN"] },
 
   "vars": {
@@ -35,7 +35,6 @@
     "ADMIN_SESSION_HOURS": "12",
     // 本番では必ず空。ローカル開発では .dev.vars の ADMIN_DEV_BYPASS=true で上書きする
     "ADMIN_DEV_BYPASS": "",
-    "EXTRACT_MODEL": "claude-haiku-5-5",
     // Google ログイン（Google Cloud Console で作成した OAuth クライアント ID）
     "GOOGLE_CLIENT_ID": "291670082685-l220m8oih2j6q38fh7181lp2nvrco9kd.apps.googleusercontent.com",
     // ダイジェストメールの送信元（Resend で認証済みのドメインのアドレス）

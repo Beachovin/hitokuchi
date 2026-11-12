@@ -5,6 +5,7 @@ import { generateNotifications } from "~/lib/engage.server";
 import { summarizePending } from "~/lib/summary.server";
 import { addDays, mondayOf, todayJst } from "~/lib/weeks";
 import { generateWeeklyBattles } from "~/lib/battles.server";
+import { runMaintenance, type MaintenanceResult } from "~/lib/retention.server";
 import { Badge, Panel, PageTitle, btn } from "~/components/admin-ui";
 import { relativeDate } from "~/lib/format";
 
@@ -22,18 +23,27 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const { results: runs } = await DB.prepare(
     `SELECT r.*, s.name AS source_name FROM scrape_runs r LEFT JOIN scrape_sources s ON s.id = r.source_id ORDER BY r.id DESC LIMIT 8`,
   ).all<{ id: number; source_name: string | null; status: string; found: number; extracted: number; skipped: number; errors: number; message: string | null; started_at: string }>();
-  return { stats: stats!, runs };
+  const m = await DB.prepare("SELECT value FROM settings WHERE key = 'maintenance_last'").first<{ value: string }>();
+  let maintenance: MaintenanceResult | null = null;
+  try {
+    maintenance = m ? (JSON.parse(m.value) as MaintenanceResult) : null;
+  } catch {}
+  return { stats: stats!, runs, maintenance };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
   const env = context.cloudflare.env;
   const admin = await requireAdmin(request, env);
   const intent = (await request.formData()).get("intent");
-  await audit(env, request, admin, `dashboard.${intent === "notify" || intent === "summary" || intent === "battles" ? intent : "collect"}`);
+  await audit(env, request, admin, `dashboard.${intent === "notify" || intent === "summary" || intent === "battles" || intent === "maintenance" ? intent : "collect"}`);
   if (intent === "battles") {
     const week = mondayOf(todayJst());
     const r = await generateWeeklyBattles(env.DB, week, addDays(week, 6));
     return { message: r.created ? `今週のバトルを ${r.created} ジャンル分作成しました` : "新しく作成できるジャンルはありませんでした（各ジャンル 2 商品以上が必要です）" };
+  }
+  if (intent === "maintenance") {
+    const r = await runMaintenance(env);
+    return { message: `後片付けを実行しました（古い商品 ${r.purge?.products ?? 0}件・未使用の画像 ${r.images?.deleted ?? 0}個を削除${r.errors.length ? `／失敗 ${r.errors.length}件` : ""}）` };
   }
   if (intent === "notify") {
     const r = await generateNotifications(env.DB, todayJst());
@@ -51,7 +61,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 const costYen = (inTok: number, outTok: number) => Math.round(((inTok * 0.1 + outTok * 0.5) / 1_000_000) * 150);
 
 export default function Dashboard({ loaderData, actionData }: Route.ComponentProps) {
-  const { stats, runs } = loaderData;
+  const { stats, runs, maintenance } = loaderData;
   const nav = useNavigation();
   const cards = [
     ["公開中の商品", stats.products, "🍱"],
@@ -65,6 +75,7 @@ export default function Dashboard({ loaderData, actionData }: Route.ComponentPro
         <Form method="post" className="flex flex-wrap gap-2">
           <button name="intent" value="battles" className={btn.ghost} disabled={nav.state !== "idle"}>⚔️ バトルを今すぐ作成</button>
           <button name="intent" value="notify" className={btn.ghost} disabled={nav.state !== "idle"}>🔔 通知を今すぐ生成</button>
+          <button name="intent" value="maintenance" className={btn.ghost} disabled={nav.state !== "idle"}>🧹 後片付けを今すぐ実行</button>
           <button name="intent" value="summary" className={btn.ghost} disabled={nav.state !== "idle"}>✨ AI 要約を生成</button>
           <button name="intent" value="collect" className={btn.primary} disabled={nav.state !== "idle"}>
             🤖 今すぐ収集を実行
@@ -120,6 +131,23 @@ export default function Dashboard({ loaderData, actionData }: Route.ComponentPro
           </p>
         </Panel>
       </div>
+      <Panel className="mt-6">
+        <h2 className="font-bold">毎朝の後片付け</h2>
+        {maintenance ? (
+          <div className="mt-2 text-sm text-stone-600 dark:text-stone-300">
+            <p>最終実行：{relativeDate(maintenance.at.replace("T", " ").slice(0, 19))}</p>
+            <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+              <li>発売から1か月を過ぎた商品：{maintenance.purge?.products ?? 0}件を削除（口コミ {maintenance.purge?.reviews ?? 0}件）</li>
+              <li>使われていない画像：{maintenance.images?.scanned ?? 0}個を確認し {maintenance.images?.deleted ?? 0}個を削除</li>
+              <li>期限切れのログイン情報：{maintenance.records?.sessions ?? 0}件を削除</li>
+              <li>古い通知・監査ログ：{(maintenance.records?.notifications ?? 0) + (maintenance.records?.audits ?? 0)}件を削除</li>
+            </ul>
+            {maintenance.errors.length > 0 && <p className="mt-2 text-rose-600">失敗：{maintenance.errors.join(" / ")}</p>}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-stone-500">まだ実行されていません（毎朝 6 時に自動で実行されます）。</p>
+        )}
+      </Panel>
     </>
   );
 }

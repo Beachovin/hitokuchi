@@ -13,10 +13,13 @@ export type Settings = {
   rakuten_affiliate_id: string;
   digest_enabled: boolean;
   ai_summary_enabled: boolean;
+  /** 運営者名とお問い合わせ先（プライバシーポリシー・利用規約に表示） */
+  operator_name: string;
+  operator_contact: string;
 };
 
 /** お客様向け画面に渡してよい設定だけ（API キー等は含めない） */
-export type PublicSettings = Pick<Settings, "ads_enabled" | "adsense_client" | "adsense_slot" | "amazon_tag" | "rakuten_affiliate_id">;
+export type PublicSettings = Pick<Settings, "ads_enabled" | "adsense_client" | "adsense_slot" | "amazon_tag" | "rakuten_affiliate_id" | "operator_name" | "operator_contact">;
 
 export async function getSettings(db: D1Database): Promise<Settings> {
   const { results } = await db.prepare("SELECT key, value FROM settings").all<{ key: string; value: string }>();
@@ -33,6 +36,8 @@ export async function getSettings(db: D1Database): Promise<Settings> {
     rakuten_affiliate_id: m.get("rakuten_affiliate_id") ?? "",
     digest_enabled: m.get("digest_enabled") === "1",
     ai_summary_enabled: m.get("ai_summary_enabled") !== "0",
+    operator_name: m.get("operator_name") ?? "",
+    operator_contact: m.get("operator_contact") ?? "",
   };
 }
 
@@ -44,6 +49,8 @@ export async function getPublicSettings(db: D1Database): Promise<PublicSettings>
     adsense_slot: s.adsense_slot,
     amazon_tag: s.amazon_tag,
     rakuten_affiliate_id: s.rakuten_affiliate_id,
+    operator_name: s.operator_name,
+    operator_contact: s.operator_contact,
   };
 }
 

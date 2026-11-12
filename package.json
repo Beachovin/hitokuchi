@@ -13,7 +13,11 @@
     "demo:add:local": "sh db/demo/add-local.sh",
     "demo:remove:local": "wrangler d1 execute hitokuchi-db --local --file=db/demo/remove.sql",
     "preview:only": "vite preview --port 4173 --strictPort",
-    "icons": "node scripts/gen-icons.mjs"
+    "icons": "node scripts/gen-icons.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prebuild": "node scripts/ci-gate.mjs",
+    "check": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
@@ -24,6 +28,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.69.0",
+    "@cloudflare/vitest-plugin": "^1.8.0",
     "@cloudflare/workers-types": "^5.20261112.1",
     "@react-router/dev": "^7.18.5",
     "@resvg/resvg-js": "^2.6.2",
@@ -34,6 +39,7 @@
     "tailwindcss": "^4.3.5",
     "typescript": "^6.0.3",
     "vite": "^8.3.8",
+    "vitest": "^4.1.12",
     "wrangler": "^4.160.1"
   }
 }

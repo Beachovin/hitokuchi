@@ -19,8 +19,8 @@ export async function politeFetch(url: string, opts: { etag?: string | null; las
   if (!/html|xml|json|text/.test(type)) throw new Error(`unsupported content-type ${type}`);
   const body = (await res.text()).slice(0, 3_000_000);
   const refresh = body.length < 2000 && body.match(/<meta[^>]+http-equiv=["']refresh["'][^>]+content=["'][^"']*url=([^"']+)["']/i)?.[1];
-  if (refresh && depth < 1) return politeFetch(new URL(refresh.trim(), res.url).href, {}, depth + 1);
-  return { body, url: res.url, etag: res.headers.get("etag"), lastModified: res.headers.get("last-modified"), notModified: false };
+  if (refresh && depth < 1) return politeFetch(new URL(refresh.trim(), res.url || url).href, {}, depth + 1);
+  return { body, url: res.url || url, etag: res.headers.get("etag"), lastModified: res.headers.get("last-modified"), notModified: false };
 }
 
 /** 一覧に載っている商品コードの集合から作るハッシュ（並び順や広告・日付表示の変化には反応しない） */

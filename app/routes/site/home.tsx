@@ -17,6 +17,11 @@ import { relativeDate } from "~/lib/format";
 
 export const meta: Route.MetaFunction = () => [
   { title: "ひとくち｜コンビニ新商品を、食べた人の口コミでチェック" },
+  { property: "og:type", content: "website" },
+  { property: "og:site_name", content: "ひとくち" },
+  { property: "og:title", content: "ひとくち｜コンビニ新商品を、食べた人の口コミでチェック" },
+  { property: "og:description", content: "セブン・ファミマ・ローソンなどコンビニの新商品を、実際に食べた人のリアルな口コミでチェック。" },
+  { name: "twitter:card", content: "summary" },
   { name: "description", content: "セブン・ファミマ・ローソンなどコンビニの新商品を、実際に食べた人のリアルな口コミでチェック。買う前に、みんなの「ひとくち」を。" },
 ];
 

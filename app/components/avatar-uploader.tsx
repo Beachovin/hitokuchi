@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { compressImage } from "~/lib/image";
 import { AVATAR_INPUT_MAX_BYTES, AVATAR_PX, AVATAR_STORE_MAX_BYTES, AVATAR_TARGET_BYTES, AVATAR_TYPES } from "~/lib/profile";
 
 /**
@@ -25,7 +26,7 @@ export function AvatarUploader({ current, nickname }: { current: string | null; 
       return;
     }
     try {
-      const resized = await compressAvatar(file);
+      const resized = await compressImage(file, { maxPx: AVATAR_PX, square: true, targetBytes: AVATAR_TARGET_BYTES });
       if (resized.size > AVATAR_STORE_MAX_BYTES) throw new Error("too large");
       const dt = new DataTransfer();
       dt.items.add(resized);
@@ -57,34 +58,4 @@ export function AvatarUploader({ current, nickname }: { current: string | null; 
       </div>
     </div>
   );
-}
-
-/**
- * プロフィール画像を正方形に切り抜いて 240px に縮小し、容量が目標以下になるまで画質を下げて圧縮する。
- * WebP を書き出せないブラウザ（古い Safari など）は JPEG にする。位置情報などのメタデータは残らない。
- */
-async function compressAvatar(file: File): Promise<File> {
-  const bmp = await createImageBitmap(file);
-  const side = Math.min(bmp.width, bmp.height);
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = Math.min(AVATAR_PX, side);
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#fff"; // 透過 PNG を JPEG にしたとき黒くならないように
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
-  bmp.close();
-
-  const encode = (type: string, q: number) => new Promise<Blob | null>((ok) => canvas.toBlob(ok, type, q));
-  const probe = await encode("image/webp", 0.8);
-  const type = probe?.type === "image/webp" ? "image/webp" : "image/jpeg";
-  let best: Blob | null = type === "image/webp" ? probe : null;
-  for (const q of [0.8, 0.7, 0.6, 0.5]) {
-    const b = q === 0.8 && best ? best : await encode(type, q);
-    if (!b) continue;
-    if (!best || b.size < best.size) best = b;
-    if (b.size <= AVATAR_TARGET_BYTES) break;
-  }
-  if (!best) throw new Error("encode failed");
-  return new File([best], type === "image/webp" ? "avatar.webp" : "avatar.jpg", { type });
 }
