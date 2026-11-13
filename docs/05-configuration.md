@@ -116,7 +116,7 @@
 | Cloudflare D1 | `hitokuchi-db`。マイグレーションはデプロイ時に自動適用 | 0013 まで適用済み |
 | Cloudflare R2 | `hitokuchi-images` | 作成済み |
 | Cloudflare Workers Builds | リポジトリ `Beachovin/hitokuchi`、ブランチ `main`。Build command `npm run build`、Deploy command `npx wrangler d1 migrations apply hitokuchi-db --remote && npx wrangler deploy`、main 以外は `npx wrangler versions upload` | 接続済み |
-| GitHub | 非公開リポジトリ。GitHub Actions で CI | 設定済み |
+| GitHub | 公開リポジトリ（個人情報・秘密情報は含めない。コミットは noreply アドレスで記録）。GitHub Actions で CI | 設定済み |
 | 独自ドメイン | Workers の Custom Domain。設定したら `SITE_ORIGIN` と Google のリダイレクト URI を変更する | 未設定 |
 | Cloudflare Access（任意） | `/admin*` に Access のポリシーを付け、`ADMIN_REQUIRE_ACCESS=true` にする | 未設定 |
 | Resend（任意） | 送信ドメインの認証、API キー | 未設定 |

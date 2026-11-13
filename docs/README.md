@@ -51,4 +51,4 @@ flowchart LR
 ```
 
 - 公開 URL：https://hitokuchi.ak-lumina-inc.workers.dev
-- リポジトリ：`Beachovin/hitokuchi`（非公開）。`main` にプッシュすると、テストが通った場合だけ本番に反映されます。
+- リポジトリ：https://github.com/Beachovin/hitokuchi（公開）。`main` にプッシュすると、テストが通った場合だけ本番に反映されます。
