@@ -43,5 +43,6 @@
     "SITE_ORIGIN": "https://hitokuchi.ak-lumina-inc.workers.dev"
   }
   // シークレット（`wrangler secret put <名前>`、ローカルは .dev.vars）:
-  //   ANTHROPIC_API_KEY, GOOGLE_CLIENT_SECRET, RESEND_API_KEY（ダイジェストメール）
+  //   ADMIN_EMAILS（オーナーの Google メールアドレス。カンマ区切り。ログインすると自動で管理者になる）
+  //   GOOGLE_CLIENT_SECRET, ANTHROPIC_API_KEY, RESEND_API_KEY（ダイジェストメール）
 }
