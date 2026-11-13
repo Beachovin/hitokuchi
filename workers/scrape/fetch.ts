@@ -30,28 +30,47 @@ export async function listHash(ids: string[]) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** robots.txt の User-agent: * の Disallow を簡易判定 */
-export async function isAllowedByRobots(url: string) {
-  const u = new URL(url);
+export type RobotsRules = { allow: string[]; disallow: string[] };
+
+/**
+ * robots.txt を取得して、自分（User-agent: * または HitokuchiBot）に当てはまる Allow / Disallow を返す。
+ * 取得できない・存在しないときは「制限なし」。同じサイトでは 1 回だけ取得して使い回す（外部リクエストを節約）。
+ */
+export async function fetchRobots(origin: string): Promise<RobotsRules> {
   try {
-    const res = await fetch(`${u.origin}/robots.txt`, { headers: { "user-agent": USER_AGENT }, signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) return true;
-    const lines = (await res.text()).split(/\r?\n/).map((l) => l.replace(/#.*/, "").trim());
-    let applies = false;
-    const disallow: string[] = [];
-    const allow: string[] = [];
-    for (const line of lines) {
-      const [k, ...rest] = line.split(":");
-      const key = k?.trim().toLowerCase();
-      const val = rest.join(":").trim();
-      if (key === "user-agent") applies = val === "*" || USER_AGENT.toLowerCase().startsWith(val.toLowerCase());
-      else if (applies && key === "disallow" && val) disallow.push(val);
-      else if (applies && key === "allow" && val) allow.push(val);
-    }
-    const path = u.pathname + u.search;
-    const longest = (list: string[]) => Math.max(-1, ...list.filter((p) => path.startsWith(p.replace(/\*.*$/, ""))).map((p) => p.length));
-    return longest(allow) >= longest(disallow);
+    const res = await fetch(`${origin}/robots.txt`, { headers: { "user-agent": USER_AGENT }, signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return { allow: [], disallow: [] };
+    return parseRobots(await res.text());
   } catch {
-    return true;
+    return { allow: [], disallow: [] };
   }
+}
+
+export function parseRobots(body: string): RobotsRules {
+  const lines = body.split(/\r?\n/).map((l) => l.replace(/#.*/, "").trim());
+  let applies = false;
+  const disallow: string[] = [];
+  const allow: string[] = [];
+  for (const line of lines) {
+    const [k, ...rest] = line.split(":");
+    const key = k?.trim().toLowerCase();
+    const val = rest.join(":").trim();
+    if (key === "user-agent") applies = val === "*" || USER_AGENT.toLowerCase().startsWith(val.toLowerCase());
+    else if (applies && key === "disallow" && val) disallow.push(val);
+    else if (applies && key === "allow" && val) allow.push(val);
+  }
+  return { allow, disallow };
+}
+
+/** 取得済みのルールで、その URL を取得してよいかを判定（より長く一致した指定が優先） */
+export function robotsAllows(rules: RobotsRules, url: string) {
+  const u = new URL(url);
+  const path = u.pathname + u.search;
+  const longest = (list: string[]) => Math.max(-1, ...list.filter((p) => path.startsWith(p.replace(/\*.*$/, ""))).map((p) => p.length));
+  return longest(rules.allow) >= longest(rules.disallow);
+}
+
+/** robots.txt を取得して判定（1 回だけ確認したいとき用） */
+export async function isAllowedByRobots(url: string) {
+  return robotsAllows(await fetchRobots(new URL(url).origin), url);
 }

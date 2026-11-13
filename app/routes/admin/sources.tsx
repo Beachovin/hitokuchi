@@ -2,6 +2,7 @@ import { Form, useNavigation } from "react-router";
 import type { Route } from "./+types/sources";
 import { audit, requireAdmin } from "~/lib/admin.server";
 import { getSettings } from "~/lib/settings.server";
+import { startBackfill, startCollection } from "~/lib/collect.server";
 import { Badge, Panel, PageTitle, btn } from "~/components/admin-ui";
 import { relativeDate } from "~/lib/format";
 
@@ -27,13 +28,12 @@ export async function action({ request, context }: Route.ActionArgs) {
   const id = Number(form.get("id"));
   if (intent === "backfill") {
     await audit(env, request, admin, "source.backfill");
-    const inst = await env.SCRAPE_WORKFLOW.create({ params: { trigger: "manual", mode: "backfill-details" } });
-    return { started: inst.id };
+    return { started: await startBackfill(env, "manual") };
   }
   if (intent === "run-all") {
     await audit(env, request, admin, "source.run", "all");
-    const inst = await env.SCRAPE_WORKFLOW.create({ params: { trigger: "manual" } });
-    return { started: inst.id };
+    const r = await startCollection(env, "manual");
+    return { started: `${r.started} 件の収集元を順番に実行します（約 ${r.finishesAfterMinutes + 5} 分で完了）` };
   }
   if (intent === "toggle") {
     await env.DB.prepare("UPDATE scrape_sources SET enabled = 1 - enabled WHERE id = ?").bind(id).run();

@@ -2,19 +2,25 @@ import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloud
 import { getSettings } from "../app/lib/settings.server";
 import { ADAPTERS, type AdapterName, type RawItem } from "./scrape/adapters";
 import { refineWithClaude } from "./scrape/claude-normalize";
-import { isAllowedByRobots, listHash, politeFetch } from "./scrape/fetch";
+import { fetchRobots, listHash, politeFetch, robotsAllows, type RobotsRules } from "./scrape/fetch";
 import { autoPublish } from "../app/lib/candidates.server";
+import { knownKeys } from "./scrape/known";
 import { normalizeByRules, normalizeKey, parseKcal, type Normalized } from "./scrape/normalize";
 
-type Params = { trigger: "cron" | "manual"; sourceId?: number; mode?: "collect" | "backfill-details" };
+type Params = { trigger: "cron" | "manual"; sourceId?: number; mode?: "collect" | "backfill-details"; startAfterMinutes?: number };
 // 手動実行は更新が無くても必ず処理する。定期実行は一覧が変わったときだけ処理する
 type Source = { id: number; name: string; adapter: AdapterName; url: string; max_items: number; list_hash: string | null; etag: string | null; last_modified: string | null };
 type Totals = { found: number; extracted: number; skipped: number; errors: number; input: number; output: number };
 
 const RETRY = { retries: { limit: 2, delay: "15 seconds", backoff: "exponential" }, timeout: "2 minutes" } as const;
 const CLAUDE_BATCH = 30;
-const DETAIL_LIMIT_PER_SOURCE = 60; // 1 回の収集で詳細ページを取得する上限（残りは「商品説明を補完」で取得）
-const BACKFILL_LIMIT = 120;
+// 無料プランでは、1 回のワークフロー実行で外部サイトへ送れるリクエストは 50 件まで。
+// 収集元ごとに別の実行に分け、robots.txt は 1 サイト 1 回だけ取得し、詳細ページは失敗しても再試行しない。
+//   収集：robots 1 ＋ 一覧 最大 3（再試行込み）＋ 詳細 40 ＝ 44 件
+//   補完：robots 最大 5 サイト ＋ 詳細 40 ＝ 45 件
+const DETAIL_LIMIT_PER_SOURCE = 40; // 残りは翌朝の「商品説明の補完」で取得
+const BACKFILL_LIMIT = 40;
+const NO_RETRY = { retries: { limit: 0, delay: "1 second" }, timeout: "1 minute" } as const;
 const STALE_DAYS = 30; // これより前に発売された商品は取り込まない（自動削除の対象と揃える）
 
 /**
@@ -26,6 +32,8 @@ const STALE_DAYS = 30; // これより前に発売された商品は取り込ま
 export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
   async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
     const { DB } = this.env;
+    // 同じサイトへ同時にアクセスしないよう、開始を少しずつずらす
+    if (event.payload.startAfterMinutes) await step.sleep("stagger", `${event.payload.startAfterMinutes} minutes`);
     if (event.payload.mode === "backfill-details") return this.backfillDetails(step);
 
     const { settings, sources } = await step.do("load settings and sources", async () => {
@@ -37,6 +45,14 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
     });
     const useClaude = settings.use_claude && !!this.env.ANTHROPIC_API_KEY;
 
+    // robots.txt はサイトごとに 1 回だけ取得する（ステップの結果は保存されるので、再実行時も取り直さない）
+    const robotsCache = new Map<string, RobotsRules>();
+    const robots = async (url: string) => {
+      const origin = new URL(url).origin;
+      if (!robotsCache.has(origin)) robotsCache.set(origin, await step.do(`robots ${origin}`, () => fetchRobots(origin)));
+      return robotsCache.get(origin)!;
+    };
+
     for (const [si, src] of sources.entries()) {
       const adapter = ADAPTERS[src.adapter];
       if (!adapter) continue;
@@ -44,7 +60,7 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
       let fetched: { items: RawItem[]; hash: string; etag: string | null; lastModified: string | null } | { unchanged: true } | { error: string };
       try {
         fetched = await step.do(`check ${src.id}`, RETRY, async () => {
-          if (!(await isAllowedByRobots(src.url))) throw new Error(`robots.txt で禁止されています: ${src.url}`);
+          if (!robotsAllows(await robots(src.url), src.url)) throw new Error(`robots.txt で禁止されています: ${src.url}`);
           const force = event.payload.trigger === "manual";
           const page = await politeFetch(src.url, force ? {} : { etag: src.etag, lastModified: src.last_modified });
           if (page.notModified) return { unchanged: true as const };
@@ -76,17 +92,7 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
         // 2. 既に候補・商品になっているものを除外し、ルールで整形
         let items = await step.do(`normalize ${src.id}`, async () => {
           const keys = raw.map((r) => `${src.adapter}:${r.externalId}`);
-          const known = new Set<string>();
-          for (let i = 0; i < keys.length; i += 90) {
-            const chunk = keys.slice(i, i + 90);
-            const ph = chunk.map(() => "?").join(",");
-            const { results } = await DB.prepare(
-              `SELECT external_key FROM product_candidates WHERE external_key IN (${ph}) UNION SELECT external_key FROM scrape_seen WHERE external_key IN (${ph})`,
-            )
-              .bind(...chunk, ...chunk)
-              .all<{ external_key: string }>();
-            results.forEach((r) => known.add(r.external_key));
-          }
+          const known = await knownKeys(DB, keys);
           // 同じチェーンで同名の商品（地域違いで商品コードが別など）は 1 件にまとめる
           const { results: sameChain } = await DB.prepare(
             "SELECT name FROM product_candidates WHERE external_key LIKE ? AND status != 'rejected' AND created_at >= datetime('now', '-60 days')",
@@ -121,7 +127,8 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
           const targets = items.filter((n) => n.isFood && !n.description && /^https?:/.test(n.url) && !n.url.includes("#")).slice(0, DETAIL_LIMIT_PER_SOURCE);
           for (const [di, n] of targets.entries()) {
             try {
-              const info = await step.do(`detail ${src.id}:${n.externalId}`, RETRY, () => fetchDetail(adapter, n.url));
+              const rules = await robots(n.url);
+              const info = await step.do(`detail ${src.id}:${n.externalId}`, NO_RETRY, () => fetchDetail(adapter, n.url, rules));
               n.description = info.description;
               n.kcal = n.kcal ?? parseKcal(info.kcalText);
             } catch (e) {
@@ -209,6 +216,12 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
   /** 承認済みで説明が未取得の商品について、詳細ページから説明・カロリーを補完する */
   private async backfillDetails(step: WorkflowStep) {
     const { DB } = this.env;
+    const robotsCache = new Map<string, RobotsRules>();
+    const robots = async (url: string) => {
+      const origin = new URL(url).origin;
+      if (!robotsCache.has(origin)) robotsCache.set(origin, await step.do(`robots ${origin}`, () => fetchRobots(origin)));
+      return robotsCache.get(origin)!;
+    };
     const targets = await step.do("backfill targets", async () => {
       const { results } = await DB.prepare(
         `SELECT p.id, p.source_url,
@@ -229,8 +242,9 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
     let failed = 0;
     for (const [i, t] of targets.entries()) {
       try {
-        await step.do(`backfill ${t.id}`, RETRY, async () => {
-          const info = await fetchDetail(ADAPTERS[t.adapter!], t.source_url);
+        const rules = await robots(t.source_url);
+        await step.do(`backfill ${t.id}`, NO_RETRY, async () => {
+          const info = await fetchDetail(ADAPTERS[t.adapter!], t.source_url, rules);
           await DB.prepare("UPDATE products SET description = COALESCE(description, ?), kcal = COALESCE(kcal, ?), detail_fetched_at = datetime('now') WHERE id = ?")
             .bind(info.description, parseKcal(info.kcalText), t.id)
             .run();
@@ -238,6 +252,8 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
         ok++;
       } catch {
         failed++;
+        // 取得できないページを毎日取りに行かないよう、試したことだけ記録する
+        await step.do(`backfill mark ${t.id}`, () => DB.prepare("UPDATE products SET detail_fetched_at = datetime('now') WHERE id = ?").bind(t.id).run().then(() => null));
       }
       if (i < targets.length - 1) await step.sleep(`backfill wait ${i}`, "2 seconds");
     }
@@ -249,8 +265,8 @@ export class ScrapeWorkflow extends WorkflowEntrypoint<Env, Params> {
   }
 }
 
-async function fetchDetail(adapter: (typeof ADAPTERS)[AdapterName], url: string) {
-  if (!(await isAllowedByRobots(url))) return { description: null, kcalText: null };
+async function fetchDetail(adapter: (typeof ADAPTERS)[AdapterName], url: string, rules: RobotsRules) {
+  if (!robotsAllows(rules, url)) return { description: null, kcalText: null };
   const page = await politeFetch(url);
   return adapter.detail!(page.body);
 }

@@ -6,6 +6,7 @@ import { summarizePending } from "~/lib/summary.server";
 import { addDays, mondayOf, todayJst } from "~/lib/weeks";
 import { generateWeeklyBattles } from "~/lib/battles.server";
 import { runMaintenance, type MaintenanceResult } from "~/lib/retention.server";
+import { startCollection } from "~/lib/collect.server";
 import { Badge, Panel, PageTitle, btn } from "~/components/admin-ui";
 import { relativeDate } from "~/lib/format";
 
@@ -53,8 +54,8 @@ export async function action({ request, context }: Route.ActionArgs) {
     const r = await summarizePending(env);
     return { message: env.ANTHROPIC_API_KEY ? `AI 要約：対象 ${r.targets}件中 ${r.done}件を生成${r.errors.length ? `（失敗 ${r.errors.length}件）` : ""}` : "ANTHROPIC_API_KEY が未設定のため生成できません" };
   }
-  const inst = await env.SCRAPE_WORKFLOW.create({ params: { trigger: "manual" } });
-  return { started: inst.id };
+  const r = await startCollection(env, "manual");
+  return { started: `${r.started} 件の収集元を順番に実行します（約 ${r.finishesAfterMinutes + 5} 分で完了）` };
 }
 
 // Haiku 5.5: $0.10 / $0.50 per 1M tokens（100K 以下のプロンプト）

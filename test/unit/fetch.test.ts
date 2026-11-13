@@ -69,3 +69,13 @@ describe("robots.txt の確認", () => {
     expect(await isAllowedByRobots("https://shop.example.test/new/")).toBe(true);
   });
 });
+
+describe("robots.txt のルールの使い回し", () => {
+  it("1 回取得したルールで、同じサイトの複数のページを判定できる", async () => {
+    const { parseRobots, robotsAllows } = await import("../../workers/scrape/fetch");
+    const rules = parseRobots("User-agent: *\nDisallow: /cart/\nAllow: /cart/info\n");
+    expect(robotsAllows(rules, "https://shop.example.test/goods/1.html")).toBe(true);
+    expect(robotsAllows(rules, "https://shop.example.test/cart/checkout")).toBe(false);
+    expect(robotsAllows(rules, "https://shop.example.test/cart/info")).toBe(true);
+  });
+});

@@ -6,6 +6,7 @@ import { getSettings } from "../app/lib/settings.server";
 import { addDays, mondayOf, todayJst } from "../app/lib/weeks";
 import { generateWeeklyBattles } from "../app/lib/battles.server";
 import { runMaintenance } from "../app/lib/retention.server";
+import { startBackfill, startCollection } from "../app/lib/collect.server";
 import { imageHeaders, isCrossSiteWrite, withSecurityHeaders } from "./security";
 
 declare module "react-router" {
@@ -47,7 +48,12 @@ export default {
       return;
     }
     // 毎朝 6:00 JST：各コンビニの新商品一覧の更新確認（変化があれば取り込み）・気になる商品の通知・今週のバトル作成
-    ctx.waitUntil(env.SCRAPE_WORKFLOW.create({ params: { trigger: "cron" } }).then(() => {}));
+    // 収集元ごとに別のワークフローで実行（開始を 2 分ずつずらす）。終わったころに、説明が未取得の商品を補う
+    ctx.waitUntil(
+      startCollection(env, "cron")
+        .then((r) => startBackfill(env, "cron", r.finishesAfterMinutes + 20))
+        .catch((e) => console.error("collection start failed", e)),
+    );
     ctx.waitUntil(generateNotifications(env.DB, todayJst()).then(() => {}));
     // 今週の新商品バトル（ジャンルごと・まだ無いジャンルだけ追加）
     const week = mondayOf(todayJst());

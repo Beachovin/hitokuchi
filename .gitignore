@@ -8,3 +8,5 @@ db/demo/demo.sql
 db/demo/avatars/
 tsconfig.tsbuildinfo
 .DS_Store
+# macOS / iCloud が作る重複ファイル（「〜 2.json」など）
+* 2.*

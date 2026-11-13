@@ -81,6 +81,8 @@ flowchart LR
 | 症状 | 原因の見当 | 対応 |
 |---|---|---|
 | ある収集元が「商品が 0 件でした」で失敗する | その会社のページ構造が変わった | `workers/scrape/adapters.ts` の該当アダプターを直し、`test/unit/adapters.test.ts` の HTML も実物に合わせて更新する。直るまでは収集元を停止する |
+| 収集ログに「Too many subrequests」 | 1 回の実行で外部へのリクエストが 50 件（無料プランの上限）を超えた | 収集元ごとに実行を分けて対策済み。それでも出る場合は `DETAIL_LIMIT_PER_SOURCE` を減らすか、Workers の有料プラン（月 $5）にすると上限が大きく上がる |
+| 収集ログに「too many SQL variables」 | 1 つの SQL に 100 個を超える値を渡した（D1 の上限） | 値を 80 個以下ずつに分けて処理する（`workers/scrape/known.ts` など） |
 | 収集が何日も動かない | 一覧に変化が無い（正常）か、robots.txt で禁止された | `/admin/sources` の「確認」「更新検知」の日時と、ログのメッセージを見る。手動の「実行」は変化が無くても取り込む |
 | ログインすると「設定が完了していません」 | `GOOGLE_CLIENT_ID` か `GOOGLE_CLIENT_SECRET` が無い | [5.2](05-configuration.md#52-環境変数vars)・[5.3](05-configuration.md#53-シークレット) を確認 |
 | 自分以外がログインできない | Google の同意画面が「テスト」のまま | Google Cloud Console で「本番環境」に切り替える |
